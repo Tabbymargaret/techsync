@@ -1,17 +1,43 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import Navbar from '../components/NavBar.tsx';
+import { supabase } from '../lib/supabase';
 
 export default function Login() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    // Auth logic will be wired up later
+    setError('');
+    setIsLoading(true);
+    try {
+      const { data, error: queryError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .eq('password_hash', password)
+        .single();
+      if (queryError || !data) {
+        setError('Invalid email or password');
+        return;
+      }
+      localStorage.setItem('techsync_user', JSON.stringify(data));
+      navigate('/dashboard');
+    } catch {
+      setError('Invalid email or password');
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-gray-900 px-4 pt-24 pb-12">
+    <div className="min-h-screen bg-slate-50 dark:bg-gray-900">
+      <Navbar />
+      <div className="px-4 pt-24 pb-12">
       <div className="mx-auto w-full max-w-md">
         <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-700 dark:bg-gray-800">
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
@@ -20,7 +46,12 @@ export default function Login() {
           <p className="mt-2 text-slate-600 dark:text-slate-400">
             Enter your credentials to access your account.
           </p>
-          <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+          {error && (
+            <div className="mt-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+              {error}
+            </div>
+          )}
+          <form onSubmit={handleLogin} className="mt-8 space-y-6">
             <div>
               <label
                 htmlFor="login-email"
@@ -59,9 +90,10 @@ export default function Login() {
             </div>
             <button
               type="submit"
-              className="w-full rounded-lg bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200 dark:focus:ring-white dark:focus:ring-offset-gray-800"
+              disabled={isLoading}
+              className="w-full rounded-lg bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200 dark:focus:ring-white dark:focus:ring-offset-gray-800"
             >
-              Sign In
+              {isLoading ? 'Signing in…' : 'Sign In'}
             </button>
           </form>
           <p className="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
@@ -74,6 +106,7 @@ export default function Login() {
             </Link>
           </p>
         </div>
+      </div>
       </div>
     </div>
   );

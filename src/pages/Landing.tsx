@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import NavBar from '../components/NavBar';
+import Navbar from '../components/NavBar.tsx';
 
 const HOW_IT_WORKS = [
   {
@@ -71,7 +71,7 @@ function PlaceholderBlock({ icon }: { icon: string }) {
 export default function Landing() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-900">
-      <NavBar />
+      <Navbar />
 
       <main>
         {/* Hero */}
