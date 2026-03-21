@@ -15,6 +15,7 @@ export type Database = {
           full_name: string;
           email: string;
           role: string;
+          tech_stack: string[] | null;
           password_hash: string;
           created_at: string;
         };
@@ -23,6 +24,7 @@ export type Database = {
           full_name: string;
           email: string;
           role: string;
+          tech_stack?: string[] | null;
           password_hash: string;
           created_at?: string;
         };
@@ -31,6 +33,7 @@ export type Database = {
           full_name?: string;
           email?: string;
           role?: string;
+          tech_stack?: string[] | null;
           password_hash?: string;
           created_at?: string;
         };

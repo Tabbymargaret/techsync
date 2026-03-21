@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Navbar from '../components/NavBar.tsx';
 
 type StoredUser = {
@@ -79,6 +79,12 @@ export default function Dashboard() {
                 {role}
               </span>
             </div>
+            <Link
+              to="/profile"
+              className="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
+            >
+              ⚙️ Edit Profile
+            </Link>
           </div>
           <div className="grid gap-6 sm:grid-cols-2 lg:gap-8">
             {cards.map((card) => (
