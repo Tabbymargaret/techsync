@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/NavBar.tsx';
 import { supabase } from '../lib/supabase';
 import type { Database } from '../types/database.types';
+import type { PostgrestError } from '@supabase/supabase-js';
 
 type StoredUser = {
   user_id?: string;
@@ -21,6 +22,13 @@ const SKILLS = [
   'Supabase',
   'DevOps',
 ] as const;
+
+function formatSupabaseError(error: PostgrestError): string {
+  const parts = [error.message, error.details, error.hint].filter(
+    (part): part is string => Boolean(part && part.trim())
+  );
+  return parts.length > 0 ? parts.join(' — ') : 'Update failed.';
+}
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -71,7 +79,12 @@ export default function Profile() {
         .single();
 
       if (queryError || !data) {
-        setError('Failed to load profile. Please try again.');
+        if (queryError) {
+          console.error('Supabase Select Error:', queryError);
+          setError(formatSupabaseError(queryError));
+        } else {
+          setError('Profile not found.');
+        }
         setIsPageLoading(false);
         return;
       }
@@ -103,6 +116,7 @@ export default function Profile() {
     setError('');
     setIsSaving(true);
 
+    // Primary key column is user_id (not id) — must match localStorage techsync_user.user_id
     const { error: updateError } = await supabase
       .from('users')
       // @ts-ignore - Supabase generated typings can infer never for updates in this setup
@@ -112,7 +126,8 @@ export default function Profile() {
     setIsSaving(false);
 
     if (updateError) {
-      setToast({ type: 'error', message: 'Could not save profile changes.' });
+      console.error('Supabase Update Error:', updateError);
+      setToast({ type: 'error', message: formatSupabaseError(updateError) });
       return;
     }
 
