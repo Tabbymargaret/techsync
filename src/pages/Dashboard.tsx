@@ -1,10 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Calendar, Settings, type LucideIcon } from 'lucide-react';
 import Navbar from '../components/NavBar.tsx';
+import StudentDashboard from './StudentDashboard.tsx';
 
 type StoredUser = {
   full_name?: string;
   role?: string;
+};
+
+type DashboardCard = {
+  title: string;
+  description: string;
+  icon?: LucideIcon;
 };
 
 const STORAGE_KEY = 'techsync_user';
@@ -53,12 +61,16 @@ export default function Dashboard() {
 
   const isStudent = role.toLowerCase() === 'student';
 
-  const studentCards = [
-    { title: 'Find a Mentor', description: 'Browse and request mentors.' },
+  const studentCards: DashboardCard[] = [
+    {
+      title: 'Upcoming Sessions',
+      description: 'View your scheduled mentorship meetings.',
+      icon: Calendar,
+    },
     { title: 'My Milestones', description: 'Track your progress.' },
   ];
 
-  const mentorCards = [
+  const mentorCards: DashboardCard[] = [
     { title: 'Pending Requests', description: 'Review student requests.' },
     { title: 'My Students', description: 'Manage your pairings.' },
   ];
@@ -81,26 +93,44 @@ export default function Dashboard() {
             </div>
             <Link
               to="/profile"
-              className="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
+              className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
             >
-              ⚙️ Edit Profile
+              <Settings className="h-4 w-4 shrink-0 text-white dark:text-slate-900" aria-hidden />
+              Edit Profile
             </Link>
           </div>
           <div className="grid gap-6 sm:grid-cols-2 lg:gap-8">
-            {cards.map((card) => (
-              <div
-                key={card.title}
-                className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-slate-700 dark:bg-gray-800"
-              >
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                  {card.title}
-                </h2>
-                <p className="mt-2 text-slate-600 dark:text-slate-400">
-                  {card.description}
-                </p>
-              </div>
-            ))}
+            {cards.map((card) => {
+              const CardIcon = card.icon;
+              return (
+                <div
+                  key={card.title}
+                  className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-slate-700 dark:bg-gray-800"
+                >
+                  {CardIcon && (
+                    <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-700/80">
+                      <CardIcon
+                        className="h-5 w-5 text-slate-700 dark:text-slate-200"
+                        aria-hidden
+                      />
+                    </div>
+                  )}
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                    {card.title}
+                  </h2>
+                  <p className="mt-2 text-slate-600 dark:text-slate-400">
+                    {card.description}
+                  </p>
+                </div>
+              );
+            })}
           </div>
+
+          {isStudent && (
+            <div className="mt-12">
+              <StudentDashboard />
+            </div>
+          )}
         </div>
       </div>
     </div>

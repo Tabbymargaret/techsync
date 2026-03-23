@@ -5,6 +5,7 @@ import Login from './pages/Login.tsx';
 import Register from './pages/Register.tsx';
 import Dashboard from './pages/Dashboard.tsx';
 import Profile from './pages/Profile.tsx';
+import MentorsDirectory from './pages/MentorsDirectory.tsx';
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
       <Route element={<ProtectedRoute />}>
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/mentors" element={<MentorsDirectory />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

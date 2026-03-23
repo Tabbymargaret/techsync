@@ -12,7 +12,7 @@ export type Database = {
       users: {
         Row: {
           user_id: string;
-          full_name: string;
+          full_name: string | null;
           email: string;
           role: string;
           tech_stack: string[] | null;
@@ -30,7 +30,7 @@ export type Database = {
         };
         Update: {
           user_id?: string;
-          full_name?: string;
+          full_name?: string | null;
           email?: string;
           role?: string;
           tech_stack?: string[] | null;

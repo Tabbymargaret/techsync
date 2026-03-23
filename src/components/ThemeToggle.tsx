@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Moon, Sun } from 'lucide-react';
 
 const STORAGE_KEY = 'techsync-theme';
 
@@ -32,7 +33,11 @@ export default function ThemeToggle() {
       className="rounded-lg p-2 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
       aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
     >
-      {isDark ? '☀️' : '🌙'}
+      {isDark ? (
+        <Sun className="h-5 w-5 shrink-0" aria-hidden />
+      ) : (
+        <Moon className="h-5 w-5 shrink-0" aria-hidden />
+      )}
     </button>
   );
 }
