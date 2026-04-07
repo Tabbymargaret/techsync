@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Flame } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
+import MentorCard from '../components/MentorCard.tsx';
 import Navbar from '../components/NavBar.tsx';
+import { calculateMatchScore } from '../lib/mentors';
+import { addRequestedMentorId, loadRequestedMentorIds } from '../lib/requestedMentorsSession';
 import { supabase } from '../lib/supabase';
 import type { Database } from '../types/database.types';
-import { calculateMatchScore, getMentorDisplayName } from './StudentDashboard.tsx';
 
 type UserRow = Database['public']['Tables']['users']['Row'];
 
@@ -23,6 +25,12 @@ export default function MentorsDirectory() {
   const [mentors, setMentors] = useState<MentorWithScore[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
+  const [studentUserId, setStudentUserId] = useState('');
+  const [requestedMentorIds, setRequestedMentorIds] = useState<Set<string>>(loadRequestedMentorIds);
+
+  const handleMentorRequestSuccess = useCallback((mentorId: string) => {
+    setRequestedMentorIds((prev) => addRequestedMentorId(prev, mentorId));
+  }, []);
 
   function handleLogout() {
     localStorage.removeItem(STORAGE_KEY);
@@ -50,6 +58,8 @@ export default function MentorsDirectory() {
         navigate('/login', { replace: true });
         return;
       }
+
+      setStudentUserId(parsed.user_id);
 
       const { data: studentRow, error: studentError } = await supabase
         .from('users')
@@ -123,34 +133,13 @@ export default function MentorsDirectory() {
           ) : (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {mentors.map((mentor) => (
-                <div
+                <MentorCard
                   key={mentor.user_id}
-                  className="flex flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-gray-800"
-                >
-                  <div className="mb-4 flex items-start justify-between gap-2">
-                    <p className="break-words text-sm font-medium text-slate-900 dark:text-white">
-                      {getMentorDisplayName(mentor)}
-                    </p>
-                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
-                      <Flame className="h-3.5 w-3.5 text-amber-800 dark:text-amber-200" aria-hidden />
-                      {mentor.matchScore}% Match
-                    </span>
-                  </div>
-                  <div className="mt-auto flex flex-wrap gap-2">
-                    {(mentor.tech_stack ?? []).length === 0 ? (
-                      <span className="text-xs text-slate-500 dark:text-slate-400">No stack listed</span>
-                    ) : (
-                      mentor.tech_stack!.map((skill) => (
-                        <span
-                          key={skill}
-                          className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200"
-                        >
-                          {skill}
-                        </span>
-                      ))
-                    )}
-                  </div>
-                </div>
+                  mentor={mentor}
+                  studentId={studentUserId}
+                  hasRequested={requestedMentorIds.has(mentor.user_id)}
+                  onRequestSuccess={handleMentorRequestSuccess}
+                />
               ))}
             </div>
           )}

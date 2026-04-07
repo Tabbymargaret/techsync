@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, Flame, Search } from 'lucide-react';
+import { ArrowRight, Search } from 'lucide-react';
+import MentorCard from '../components/MentorCard.tsx';
+import { calculateMatchScore } from '../lib/mentors';
+import { addRequestedMentorId, loadRequestedMentorIds } from '../lib/requestedMentorsSession';
 import { supabase } from '../lib/supabase';
 import type { Database } from '../types/database.types';
 
@@ -18,29 +21,17 @@ type StoredUser = {
 
 const STORAGE_KEY = 'techsync_user';
 
-const MENTOR_FALLBACK_NAME = 'TechSync Mentor';
-
-export function getMentorDisplayName(mentor: Pick<UserRow, 'full_name'>): string {
-  const trimmed = mentor.full_name?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : MENTOR_FALLBACK_NAME;
-}
-
-export function calculateMatchScore(
-  studentStack: string[],
-  mentorStack: string[]
-): number {
-  if (studentStack.length === 0) return 0;
-  const mentorSet = new Set(mentorStack);
-  const sharedCount = studentStack.filter((skill) => mentorSet.has(skill)).length;
-  return Math.round((sharedCount / studentStack.length) * 100);
-}
-
 export default function StudentDashboard() {
   const navigate = useNavigate();
   const [currentStudent, setCurrentStudent] = useState<CurrentStudent | null>(null);
   const [mentors, setMentors] = useState<MentorWithScore[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
+  const [requestedMentorIds, setRequestedMentorIds] = useState<Set<string>>(loadRequestedMentorIds);
+
+  const handleMentorRequestSuccess = useCallback((mentorId: string) => {
+    setRequestedMentorIds((prev) => addRequestedMentorId(prev, mentorId));
+  }, []);
 
   useEffect(() => {
     async function loadMentorsAndStudent() {
@@ -167,34 +158,13 @@ export default function StudentDashboard() {
       ) : (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {topMatches.map((mentor) => (
-            <div
+            <MentorCard
               key={mentor.user_id}
-              className="flex flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-gray-800"
-            >
-              <div className="mb-4 flex items-start justify-between gap-2">
-                <p className="break-words text-sm font-medium text-slate-900 dark:text-white">
-                  {getMentorDisplayName(mentor)}
-                </p>
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
-                  <Flame className="h-3.5 w-3.5 text-amber-800 dark:text-amber-200" aria-hidden />
-                  {mentor.matchScore}% Match
-                </span>
-              </div>
-              <div className="mt-auto flex flex-wrap gap-2">
-                {(mentor.tech_stack ?? []).length === 0 ? (
-                  <span className="text-xs text-slate-500 dark:text-slate-400">No stack listed</span>
-                ) : (
-                  mentor.tech_stack!.map((skill) => (
-                    <span
-                      key={skill}
-                      className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200"
-                    >
-                      {skill}
-                    </span>
-                  ))
-                )}
-              </div>
-            </div>
+              mentor={mentor}
+              studentId={currentStudent?.user_id ?? ''}
+              hasRequested={requestedMentorIds.has(mentor.user_id)}
+              onRequestSuccess={handleMentorRequestSuccess}
+            />
           ))}
         </div>
       )}
