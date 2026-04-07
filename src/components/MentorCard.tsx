@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import emailjs from '@emailjs/browser';
 import { Check, Flame, UserPlus } from 'lucide-react';
 import { getMentorDisplayName } from '../lib/mentors';
 import { supabase } from '../lib/supabase';
@@ -6,6 +7,7 @@ import { supabase } from '../lib/supabase';
 export type MentorCardData = {
   user_id: string;
   full_name: string | null;
+  email?: string | null;
   tech_stack: string[] | null;
   matchScore: number;
 };
@@ -89,6 +91,19 @@ export default function MentorCard({
       console.log('Mentorship requested with mentor ID:', mentor.user_id);
       setToast({ type: 'success', message: 'Mentorship request sent!' });
       onRequestSuccess(mentor.user_id);
+      try {
+        await emailjs.send(
+          'YOUR_SERVICE_ID',
+          'YOUR_TEMPLATE_ID',
+          {
+            to_email: (mentor.email ?? '').trim(),
+            student_name: 'A Student',
+          },
+          'YOUR_PUBLIC_KEY'
+        );
+      } catch (emailErr) {
+        console.error('EmailJS mentor notification failed:', emailErr);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Request failed.';
       console.error('Mentorship request failed:', err);
@@ -96,7 +111,7 @@ export default function MentorCard({
     } finally {
       setIsSubmitting(false);
     }
-  }, [hasRequested, isSubmitting, mentor.user_id, onRequestSuccess, studentId]);
+  }, [hasRequested, isSubmitting, mentor.email, mentor.user_id, onRequestSuccess, studentId]);
 
   const requested = hasRequested;
   const disabled = requested || isSubmitting;
