@@ -15,6 +15,10 @@ export default function Navbar({ onLogout }: NavBarProps) {
         >
           TechSync
         </Link>
+        // Add this next to your 'Home' or 'Mentors' links
+<a href="/dashboard" className="text-gray-600 hover:text-blue-600">
+  Dashboard
+</a>
         <div className="flex items-center gap-2">
           <ThemeToggle />
           {onLogout ? (
