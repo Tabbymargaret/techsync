@@ -4,7 +4,6 @@ import { ArrowLeft } from 'lucide-react';
 import MentorCard from '../components/MentorCard.tsx';
 import Navbar from '../components/NavBar.tsx';
 import { calculateMatchScore } from '../lib/mentors';
-import { addRequestedMentorId, loadRequestedMentorIds } from '../lib/requestedMentorsSession';
 import { supabase } from '../lib/supabase';
 import { dashboardPathFromStoredUser } from '../lib/dashboardPath';
 import type { Database } from '../types/database.types';
@@ -27,10 +26,10 @@ export default function MentorsDirectory() {
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
   const [studentUserId, setStudentUserId] = useState('');
-  const [requestedMentorIds, setRequestedMentorIds] = useState<Set<string>>(loadRequestedMentorIds);
+  const [requestedMentorIds, setRequestedMentorIds] = useState<Set<string>>(() => new Set());
 
   const handleMentorRequestSuccess = useCallback((mentorId: string) => {
-    setRequestedMentorIds((prev) => addRequestedMentorId(prev, mentorId));
+    setRequestedMentorIds((prev) => new Set(prev).add(mentorId));
   }, []);
 
   function handleLogout() {
@@ -60,12 +59,26 @@ export default function MentorsDirectory() {
         return;
       }
 
-      setStudentUserId(parsed.user_id);
+      const studentId = parsed.user_id;
+      setStudentUserId(studentId);
+
+      const { data: requestRows } = await supabase
+        .from('mentorship_pairing')
+        .select('mentor_id')
+        .eq('student_id', studentId)
+        .in('status', ['Pending', 'Accepted']);
+
+      const existingIds = new Set<string>();
+      for (const row of requestRows ?? []) {
+        const id = (row as { mentor_id?: string }).mentor_id;
+        if (typeof id === 'string') existingIds.add(id);
+      }
+      setRequestedMentorIds(existingIds);
 
       const { data: studentRow, error: studentError } = await supabase
         .from('users')
         .select('tech_stack')
-        .eq('user_id', parsed.user_id)
+        .eq('user_id', studentId)
         .single();
 
       const studentStack =

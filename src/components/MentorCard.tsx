@@ -18,20 +18,11 @@ type MentorCardProps = {
   studentId: string;
   hasRequested: boolean;
   onRequestSuccess: (mentorId: string) => void;
+  /** When true, student already has a Pending/Accepted mentorship (one-at-a-time). */
+  requestsGloballyDisabled?: boolean;
 };
 
 const TOAST_MS = 3500;
-
-/** Provisional pairing window for DB NOT NULL dates; adjust when request is accepted. */
-function provisionalPairingDates(): { start_date: string; end_date: string } {
-  const start = new Date();
-  const end = new Date(start);
-  end.setMonth(end.getMonth() + 6);
-  return {
-    start_date: start.toISOString().slice(0, 10),
-    end_date: end.toISOString().slice(0, 10),
-  };
-}
 
 export async function insertMentorshipRequest(
   studentId: string,
@@ -41,16 +32,12 @@ export async function insertMentorshipRequest(
     if (!studentId.trim()) {
       return { error: new Error('You must be logged in to send a request.') };
     }
-    const { start_date, end_date } = provisionalPairingDates();
     const payload = {
       student_id: studentId,
       mentor_id: mentorId,
       status: 'Pending',
-      start_date,
-      end_date,
     };
-    // @ts-expect-error Supabase client insert typing can resolve to never in this project
-    const { error } = await supabase.from('mentorship_pairing').insert(payload);
+    const { error } = await supabase.from('mentorship_pairing').insert(payload as never);
     if (error) {
       return { error: new Error(error.message) };
     }
@@ -66,6 +53,7 @@ export default function MentorCard({
   studentId,
   hasRequested,
   onRequestSuccess,
+  requestsGloballyDisabled = false,
 }: MentorCardProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(
@@ -78,8 +66,8 @@ export default function MentorCard({
     return () => window.clearTimeout(t);
   }, [toast]);
 
-  const handleRequestMentorship = useCallback(async () => {
-    if (hasRequested || isSubmitting) return;
+  const handleSendRequest = useCallback(async () => {
+    if (hasRequested || isSubmitting || requestsGloballyDisabled) return;
     setIsSubmitting(true);
     try {
       const { error } = await insertMentorshipRequest(studentId, mentor.user_id);
@@ -88,7 +76,6 @@ export default function MentorCard({
         setToast({ type: 'error', message: error.message });
         return;
       }
-      console.log('Mentorship requested with mentor ID:', mentor.user_id);
       setToast({ type: 'success', message: 'Mentorship request sent!' });
       onRequestSuccess(mentor.user_id);
       try {
@@ -113,10 +100,19 @@ export default function MentorCard({
     } finally {
       setIsSubmitting(false);
     }
-  }, [hasRequested, isSubmitting, mentor.email, mentor.user_id, onRequestSuccess, studentId]);
+  }, [
+    hasRequested,
+    isSubmitting,
+    requestsGloballyDisabled,
+    mentor.email,
+    mentor.user_id,
+    onRequestSuccess,
+    studentId,
+  ]);
 
   const requested = hasRequested;
-  const disabled = requested || isSubmitting;
+  const slotBlocksOtherMentors = requestsGloballyDisabled && !hasRequested;
+  const disabled = requested || isSubmitting || requestsGloballyDisabled;
 
   return (
     <div className="flex min-h-[240px] flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-xl dark:border-slate-700 dark:bg-gray-800">
@@ -157,12 +153,12 @@ export default function MentorCard({
       </div>
       <button
         type="button"
-        onClick={handleRequestMentorship}
+        onClick={handleSendRequest}
         disabled={disabled}
         className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
-          requested
-            ? 'cursor-not-allowed bg-slate-300 text-slate-600 dark:bg-slate-600 dark:text-slate-300'
-            : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500 hover:cursor-pointer disabled:cursor-not-allowed disabled:opacity-70'
+          requested || slotBlocksOtherMentors
+            ? 'cursor-not-allowed bg-slate-300 text-slate-600 opacity-75 dark:bg-slate-600 dark:text-slate-300'
+            : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500 hover:cursor-pointer disabled:cursor-not-allowed disabled:opacity-70 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-500 dark:focus:ring-blue-400'
         }`}
       >
         {requested ? (
@@ -170,6 +166,8 @@ export default function MentorCard({
             <Check className="h-4 w-4 shrink-0" aria-hidden />
             Request Sent
           </>
+        ) : slotBlocksOtherMentors ? (
+          <>One mentorship at a time</>
         ) : (
           <>
             <UserPlus className="h-4 w-4 shrink-0" aria-hidden />

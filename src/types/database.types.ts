@@ -122,29 +122,6 @@ export type Database = {
           created_at?: string;
         };
       };
-      mentorship_requests: {
-        Row: {
-          request_id: string;
-          student_id: string;
-          mentor_id: string;
-          status: string;
-          created_at: string;
-        };
-        Insert: {
-          request_id?: string;
-          student_id: string;
-          mentor_id: string;
-          status: string;
-          created_at?: string;
-        };
-        Update: {
-          request_id?: string;
-          student_id?: string;
-          mentor_id?: string;
-          status?: string;
-          created_at?: string;
-        };
-      };
       milestones: {
         Row: {
           milestone_id: string;
