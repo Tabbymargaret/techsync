@@ -16,12 +16,6 @@ export default function Navbar({ onLogout }: NavBarProps) {
           TechSync
         </Link>
         <div className="flex items-center gap-2">
-          <Link to="/dashboard" className="text-gray-600 hover:text-blue-600">
-            Dashboard
-          </Link>
-          <Link to="/mentors" className="text-gray-600 hover:text-blue-600">
-            Mentors
-          </Link>
           <ThemeToggle />
           {onLogout ? (
             <button

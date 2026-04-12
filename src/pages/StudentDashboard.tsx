@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, Search } from 'lucide-react';
+import Navbar from '../components/NavBar.tsx';
 import MentorCard from '../components/MentorCard.tsx';
 import { calculateMatchScore } from '../lib/mentors';
 import { addRequestedMentorId, loadRequestedMentorIds } from '../lib/requestedMentorsSession';
@@ -106,68 +107,75 @@ export default function StudentDashboard() {
       .sort((a, b) => b.matchScore - a.matchScore);
   }, [mentors]);
 
-  if (isLoading) {
-    return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center dark:border-slate-700 dark:bg-gray-800">
-        <p className="text-slate-600 dark:text-slate-400">Loading mentors…</p>
-      </div>
-    );
-  }
-
-  if (fetchError) {
-    return (
-      <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-400">
-        {fetchError}
-      </div>
-    );
+  async function handleLogout() {
+    localStorage.removeItem(STORAGE_KEY);
+    await supabase.auth.signOut();
+    navigate('/login', { replace: true });
   }
 
   return (
-    <section className="space-y-6">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
-            Recommended Mentors
-          </h2>
-          {currentStudent && (currentStudent.tech_stack?.length ?? 0) === 0 && (
-            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-              Add skills in your profile to get match scores.
-            </p>
-          )}
-        </div>
-        <Link
-          to="/mentors"
-          className="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-blue-600 transition hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-        >
-          Browse All Mentors
-          <ArrowRight className="h-4 w-4" aria-hidden />
-        </Link>
-      </div>
-
-      {mentors.length === 0 ? (
-        <p className="text-center text-slate-600 dark:text-slate-400">No mentors available yet.</p>
-      ) : topMatches.length === 0 ? (
-        <div className="rounded-2xl border border-slate-200 bg-white px-6 py-12 text-center dark:border-slate-700 dark:bg-gray-800">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700">
-            <Search className="h-6 w-6 text-slate-600 dark:text-slate-300" aria-hidden />
+    <div className="min-h-screen bg-slate-50 dark:bg-gray-900">
+      <Navbar onLogout={handleLogout} />
+      <main className="mx-auto max-w-7xl px-4 pt-24 pb-12">
+        {isLoading ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm dark:border-slate-700 dark:bg-gray-800">
+            <p className="text-slate-600 dark:text-slate-400">Loading mentors…</p>
           </div>
-          <p className="mt-4 text-sm font-medium text-slate-900 dark:text-white">
-            No high-percentage matches found for your current stack.
-          </p>
-        </div>
-      ) : (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {topMatches.map((mentor) => (
-            <MentorCard
-              key={mentor.user_id}
-              mentor={mentor}
-              studentId={currentStudent?.user_id ?? ''}
-              hasRequested={requestedMentorIds.has(mentor.user_id)}
-              onRequestSuccess={handleMentorRequestSuccess}
-            />
-          ))}
-        </div>
-      )}
-    </section>
+        ) : fetchError ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700 shadow-sm dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-400">
+            {fetchError}
+          </div>
+        ) : (
+          <section className="space-y-6">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
+                  Recommended Mentors
+                </h2>
+                {currentStudent && (currentStudent.tech_stack?.length ?? 0) === 0 && (
+                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                    Add skills in your profile to get match scores.
+                  </p>
+                )}
+              </div>
+              <Link
+                to="/mentors"
+                className="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-blue-600 transition hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+              >
+                Browse All Mentors
+                <ArrowRight className="h-4 w-4" aria-hidden />
+              </Link>
+            </div>
+
+            {mentors.length === 0 ? (
+              <div className="rounded-2xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm dark:border-slate-700 dark:bg-gray-800">
+                <p className="text-slate-600 dark:text-slate-400">No mentors available yet.</p>
+              </div>
+            ) : topMatches.length === 0 ? (
+              <div className="rounded-2xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm dark:border-slate-700 dark:bg-gray-800">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700">
+                  <Search className="h-6 w-6 text-slate-600 dark:text-slate-300" aria-hidden />
+                </div>
+                <p className="mt-4 text-sm font-medium text-slate-900 dark:text-white">
+                  No high-percentage matches found for your current stack.
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {topMatches.map((mentor) => (
+                  <MentorCard
+                    key={mentor.user_id}
+                    mentor={mentor}
+                    studentId={currentStudent?.user_id ?? ''}
+                    hasRequested={requestedMentorIds.has(mentor.user_id)}
+                    onRequestSuccess={handleMentorRequestSuccess}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+      </main>
+    </div>
   );
 }

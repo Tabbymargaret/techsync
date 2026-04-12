@@ -3,7 +3,9 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Landing from './pages/Landing.tsx';
 import Login from './pages/Login.tsx';
 import Register from './pages/Register.tsx';
-import Dashboard from './pages/Dashboard.tsx';
+import DashboardRedirect from './pages/DashboardRedirect.tsx';
+import MentorDashboard from './pages/MentorDashboard.tsx';
+import StudentDashboard from './pages/StudentDashboard.tsx';
 import Profile from './pages/Profile.tsx';
 import MentorsDirectory from './pages/MentorsDirectory.tsx';
 
@@ -14,7 +16,9 @@ function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route element={<ProtectedRoute />}>
-        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/dashboard" element={<DashboardRedirect />} />
+        <Route path="/mentor-dashboard" element={<MentorDashboard />} />
+        <Route path="/student-dashboard" element={<StudentDashboard />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/mentors" element={<MentorsDirectory />} />
       </Route>

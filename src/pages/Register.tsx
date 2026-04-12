@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Navbar from '../components/NavBar.tsx';
 import { supabase } from '../lib/supabase';
+import { dashboardPathForRole } from '../lib/dashboardPath';
 import type { Database } from '../types/database.types';
 
 type Role = 'Student' | 'Mentor';
 type UserInsert = Database['public']['Tables']['users']['Insert'];
+type UserRow = Database['public']['Tables']['users']['Row'];
 
 export default function Register() {
   const navigate = useNavigate();
@@ -21,16 +23,61 @@ export default function Register() {
     setError('');
     setIsLoading(true);
     try {
+      const trimmedEmail = email.trim();
+
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: trimmedEmail,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            role,
+          },
+        },
+      });
+
+      if (authError) {
+        setError(authError.message);
+        return;
+      }
+
+      const authUser = authData.user;
+      if (!authUser) {
+        setError('Registration did not return a user. Please try again.');
+        return;
+      }
+
       const row: UserInsert = {
+        user_id: authUser.id,
         full_name: fullName,
-        email,
+        email: trimmedEmail,
         role,
-        password_hash: password,
+        password_hash: '',
       };
-      // @ts-expect-error - Supabase generated types can infer never for insert; row matches users.Insert
-      const { error: insertError } = await supabase.from('users').insert(row);
-      if (insertError) throw insertError;
-      navigate('/login');
+
+      const { data: insertedRow, error: insertError } = await supabase
+        .from('users')
+        .insert(row as UserInsert as never)
+        .select()
+        .single();
+
+      if (insertError) {
+        await supabase.auth.signOut();
+        setError(insertError.message);
+        return;
+      }
+
+      if (authData.session && insertedRow) {
+        localStorage.setItem('techsync_user', JSON.stringify(insertedRow));
+        const nextPath = dashboardPathForRole((insertedRow as UserRow).role);
+        if (nextPath === '/login') {
+          localStorage.removeItem('techsync_user');
+          await supabase.auth.signOut();
+        }
+        navigate(nextPath, { replace: true });
+      } else {
+        navigate('/login', { replace: true });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Registration failed';
       setError(message);

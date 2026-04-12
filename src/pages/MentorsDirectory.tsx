@@ -6,6 +6,7 @@ import Navbar from '../components/NavBar.tsx';
 import { calculateMatchScore } from '../lib/mentors';
 import { addRequestedMentorId, loadRequestedMentorIds } from '../lib/requestedMentorsSession';
 import { supabase } from '../lib/supabase';
+import { dashboardPathFromStoredUser } from '../lib/dashboardPath';
 import type { Database } from '../types/database.types';
 
 type UserRow = Database['public']['Tables']['users']['Row'];
@@ -97,6 +98,8 @@ export default function MentorsDirectory() {
     void load();
   }, [navigate]);
 
+  const backToDashboardPath = dashboardPathFromStoredUser();
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-900">
       <Navbar onLogout={handleLogout} />
@@ -112,7 +115,7 @@ export default function MentorsDirectory() {
               </p>
             </div>
             <Link
-              to="/dashboard"
+              to={backToDashboardPath}
               className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-gray-800 dark:text-white dark:hover:bg-slate-700"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden />

@@ -2,6 +2,10 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Navbar from '../components/NavBar.tsx';
 import { supabase } from '../lib/supabase';
+import type { Database } from '../types/database.types';
+import { dashboardPathForRole } from '../lib/dashboardPath';
+
+type UserRow = Database['public']['Tables']['users']['Row'];
 
 export default function Login() {
   const navigate = useNavigate();
@@ -15,20 +19,76 @@ export default function Login() {
     setError('');
     setIsLoading(true);
     try {
-      const { data, error: queryError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', email)
-        .eq('password_hash', password)
-        .single();
-      if (queryError || !data) {
-        setError('Invalid email or password');
+      const trimmedEmail = email.trim();
+
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: trimmedEmail,
+        password,
+      });
+
+      if (authError) {
+        setError(authError.message || 'Invalid email or password');
         return;
       }
-      localStorage.setItem('techsync_user', JSON.stringify(data));
-      navigate('/dashboard');
-    } catch {
-      setError('Invalid email or password');
+
+      if (!authData.session) {
+        setError(
+          'No active session. If email confirmation is required, check your inbox and try again.'
+        );
+        return;
+      }
+
+      const authUser = authData.user;
+
+      const { data: profile, error: profileError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('user_id', authUser.id)
+        .maybeSingle();
+
+      if (profileError) {
+        setError(profileError.message);
+        await supabase.auth.signOut();
+        return;
+      }
+
+      let roleForRoute: string;
+
+      if (profile) {
+        localStorage.setItem('techsync_user', JSON.stringify(profile));
+        roleForRoute = (profile as UserRow).role;
+      } else {
+        const fallbackRole =
+          typeof authUser.user_metadata?.role === 'string'
+            ? authUser.user_metadata.role
+            : 'Student';
+        localStorage.setItem(
+          'techsync_user',
+          JSON.stringify({
+            user_id: authUser.id,
+            email: authUser.email ?? trimmedEmail,
+            full_name:
+              typeof authUser.user_metadata?.full_name === 'string'
+                ? authUser.user_metadata.full_name
+                : null,
+            role: fallbackRole,
+            tech_stack: null,
+            password_hash: '',
+            created_at: new Date().toISOString(),
+          })
+        );
+        roleForRoute = fallbackRole;
+      }
+
+      const nextPath = dashboardPathForRole(roleForRoute);
+      if (nextPath === '/login') {
+        localStorage.removeItem('techsync_user');
+        await supabase.auth.signOut();
+      }
+      navigate(nextPath, { replace: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Invalid email or password';
+      setError(message);
     } finally {
       setIsLoading(false);
     }

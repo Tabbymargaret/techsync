@@ -93,13 +93,15 @@ export default function MentorCard({
       onRequestSuccess(mentor.user_id);
       try {
         await emailjs.send(
-          'YOUR_SERVICE_ID',
-          'YOUR_TEMPLATE_ID',
+          'service_lsio4nt',
+          'template_kljm4sa',
           {
             to_email: (mentor.email ?? '').trim(),
             student_name: 'A Student',
           },
-          'YOUR_PUBLIC_KEY'
+          {
+            publicKey: 'DTJVb3Gg5evA10t3Z'
+          }
         );
       } catch (emailErr) {
         console.error('EmailJS mentor notification failed:', emailErr);
