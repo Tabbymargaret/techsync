@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, Search } from 'lucide-react';
+import { ArrowRight, Search, Settings } from 'lucide-react';
 import Navbar from '../components/NavBar.tsx';
 import MentorCard from '../components/MentorCard.tsx';
 import { calculateMatchScore } from '../lib/mentors';
@@ -138,13 +138,22 @@ export default function StudentDashboard() {
                   </p>
                 )}
               </div>
-              <Link
-                to="/mentors"
-                className="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-blue-600 transition hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-              >
-                Browse All Mentors
-                <ArrowRight className="h-4 w-4" aria-hidden />
-              </Link>
+              <div className="flex flex-wrap items-center gap-3 sm:justify-end">
+                <Link
+                  to="/profile"
+                  className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
+                >
+                  <Settings className="h-4 w-4 shrink-0" aria-hidden />
+                  Edit Profile
+                </Link>
+                <Link
+                  to="/mentors"
+                  className="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-blue-600 transition hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                >
+                  Browse All Mentors
+                  <ArrowRight className="h-4 w-4" aria-hidden />
+                </Link>
+              </div>
             </div>
 
             {mentors.length === 0 ? (

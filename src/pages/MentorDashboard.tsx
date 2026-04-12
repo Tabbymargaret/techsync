@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { Settings } from 'lucide-react';
 import Navbar from '../components/NavBar.tsx';
 import { supabase } from '../lib/supabase';
 import type { Database } from '../types/database.types';
@@ -221,16 +222,25 @@ export default function MentorDashboard() {
       <Navbar onLogout={handleLogout} />
       <main className="px-4 pt-24 pb-12">
         <section className="mx-auto max-w-5xl space-y-6">
-          <div className="space-y-1">
-            <p className="text-lg font-medium text-slate-700 dark:text-slate-200 sm:text-xl">
-              Hi {greetingName === null ? 'Mentor' : greetingName},
-            </p>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white sm:text-3xl">
-              Mentor Inbox
-            </h1>
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              Review and respond to pending mentorship requests.
-            </p>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0 space-y-1">
+              <p className="text-lg font-medium text-slate-700 dark:text-slate-200 sm:text-xl">
+                Hi {greetingName === null ? 'Mentor' : greetingName},
+              </p>
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white sm:text-3xl">
+                Mentor Inbox
+              </h1>
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                Review and respond to pending mentorship requests.
+              </p>
+            </div>
+            <Link
+              to="/profile"
+              className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
+            >
+              <Settings className="h-4 w-4 shrink-0 text-white dark:text-slate-900" aria-hidden />
+              Edit Profile
+            </Link>
           </div>
           {errorMessage && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-400">
