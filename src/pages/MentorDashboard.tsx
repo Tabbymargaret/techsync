@@ -5,10 +5,94 @@ import Navbar from '../components/NavBar.tsx';
 import { supabase } from '../lib/supabase';
 import type { Database } from '../types/database.types';
 
-type MentorshipRequestRow = Database['public']['Tables']['mentorship_requests']['Row'];
-type MentorshipRequestUpdate = Database['public']['Tables']['mentorship_requests']['Update'];
+type MentorshipPairingRow = Database['public']['Tables']['mentorship_pairing']['Row'];
+type MentorshipPairingUpdate = Database['public']['Tables']['mentorship_pairing']['Update'];
+
+type PairingListColumns = Pick<
+  MentorshipPairingRow,
+  'pairing_id' | 'student_id' | 'mentor_id' | 'status' | 'created_at'
+>;
+
+/** Inbox row with resolved student profile for display */
+type PendingRequestWithStudent = PairingListColumns & {
+  studentDisplayName: string;
+  studentTechStack: string[];
+};
+
+const PAIRING_LIST_SELECT =
+  'pairing_id, student_id, mentor_id, status, created_at' as const;
 
 const STORAGE_KEY = 'techsync_user';
+
+function parseEmbeddedStudent(raw: unknown): {
+  full_name: string | null;
+  tech_stack: string[] | null;
+} | null {
+  if (raw == null) return null;
+  if (Array.isArray(raw)) {
+    const first = raw[0];
+    if (first && typeof first === 'object' && first !== null) {
+      return first as { full_name: string | null; tech_stack: string[] | null };
+    }
+    return null;
+  }
+  if (typeof raw === 'object') {
+    return raw as { full_name: string | null; tech_stack: string[] | null };
+  }
+  return null;
+}
+
+function mapJoinRowsToPending(rows: unknown[]): PendingRequestWithStudent[] {
+  return rows.map((row) => {
+    const r = row as Record<string, unknown>;
+    const student = parseEmbeddedStudent(r.student);
+    const student_id = String(r.student_id ?? '');
+    const name = student?.full_name?.trim();
+    const stack = student?.tech_stack;
+    return {
+      pairing_id: String(r.pairing_id ?? ''),
+      student_id,
+      mentor_id: String(r.mentor_id ?? ''),
+      status: String(r.status ?? ''),
+      created_at: String(r.created_at ?? ''),
+      studentDisplayName: name || student_id,
+      studentTechStack: Array.isArray(stack) ? stack : [],
+    };
+  });
+}
+
+async function enrichPairingsWithUsers(
+  pairings: PairingListColumns[]
+): Promise<PendingRequestWithStudent[]> {
+  const ids = [...new Set(pairings.map((p) => p.student_id).filter(Boolean))];
+  const userById = new Map<string, { full_name: string | null; tech_stack: string[] | null }>();
+
+  if (ids.length > 0) {
+    const { data: userRows } = await supabase
+      .from('users')
+      .select('user_id, full_name, tech_stack')
+      .in('user_id', ids);
+
+    for (const u of userRows ?? []) {
+      const row = u as {
+        user_id: string;
+        full_name: string | null;
+        tech_stack: string[] | null;
+      };
+      userById.set(row.user_id, { full_name: row.full_name, tech_stack: row.tech_stack });
+    }
+  }
+
+  return pairings.map((p) => {
+    const u = userById.get(p.student_id);
+    const name = u?.full_name?.trim();
+    return {
+      ...p,
+      studentDisplayName: name || p.student_id,
+      studentTechStack: u?.tech_stack ?? [],
+    };
+  });
+}
 
 function firstNameFromFullName(fullName: string): string {
   const trimmed = fullName.trim();
@@ -21,7 +105,7 @@ export default function MentorDashboard() {
   const [mentorAuthId, setMentorAuthId] = useState<string | null>(null);
   /** `null` while resolving; then first name or "Mentor" if none */
   const [greetingName, setGreetingName] = useState<string | null>(null);
-  const [requests, setRequests] = useState<MentorshipRequestRow[]>([]);
+  const [requests, setRequests] = useState<PendingRequestWithStudent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set());
@@ -87,60 +171,87 @@ export default function MentorDashboard() {
   useEffect(() => {
     if (mentorAuthId === null) return;
     const mentorId: string = mentorAuthId;
+    let cancelled = false;
 
     async function loadPendingRequests() {
       setIsLoading(true);
       setErrorMessage('');
 
-      const { data, error } = await supabase
-        .from('mentorship_requests')
-        .select('request_id, student_id, mentor_id, status, created_at')
+      const joinSelect = `${PAIRING_LIST_SELECT}, student:users!student_id(full_name, tech_stack)`;
+
+      const { data: joinData, error: joinError } = await supabase
+        .from('mentorship_pairing')
+        .select(joinSelect)
         .eq('status', 'Pending')
         .eq('mentor_id', mentorId)
         .order('created_at', { ascending: false });
 
-      if (error) {
-        setErrorMessage(error.message);
-        setIsLoading(false);
-        return;
+      let list: PendingRequestWithStudent[] = [];
+
+      if (!joinError && joinData != null) {
+        list = mapJoinRowsToPending(joinData);
+      } else {
+        const { data: baseRows, error: baseError } = await supabase
+          .from('mentorship_pairing')
+          .select(PAIRING_LIST_SELECT)
+          .eq('status', 'Pending')
+          .eq('mentor_id', mentorId)
+          .order('created_at', { ascending: false });
+
+        if (baseError) {
+          if (!cancelled) {
+            setErrorMessage(
+              joinError
+                ? `${joinError.message} (fallback: ${baseError.message})`
+                : baseError.message
+            );
+            setIsLoading(false);
+          }
+          return;
+        }
+
+        list = await enrichPairingsWithUsers((baseRows ?? []) as PairingListColumns[]);
       }
 
-      setRequests((data ?? []) as MentorshipRequestRow[]);
+      if (cancelled) return;
+      setRequests(list);
       setIsLoading(false);
     }
 
     void loadPendingRequests();
+    return () => {
+      cancelled = true;
+    };
   }, [mentorAuthId]);
 
-  async function handleUpdateStatus(requestId: string, newStatus: 'Accepted' | 'Declined') {
+  async function handleUpdateStatus(pairingId: string, newStatus: 'Accepted' | 'Declined') {
     setUpdatingIds((prev) => {
       const next = new Set(prev);
-      next.add(requestId);
+      next.add(pairingId);
       return next;
     });
     setErrorMessage('');
 
-    const patch: MentorshipRequestUpdate = { status: newStatus };
+    const patch: MentorshipPairingUpdate = { status: newStatus };
     const { error } = await supabase
-      .from('mentorship_requests')
-      // Supabase client infers `.update()` as `never` for this table in strict project builds
-      .update(patch as MentorshipRequestUpdate as never)
-      .eq('request_id', requestId);
+      .from('mentorship_pairing')
+      .update(patch as MentorshipPairingUpdate as never)
+      .eq('pairing_id', pairingId);
 
     if (error) {
       setErrorMessage(error.message);
       setUpdatingIds((prev) => {
         const next = new Set(prev);
-        next.delete(requestId);
+        next.delete(pairingId);
         return next;
       });
       return;
     }
 
-    setRequests((prev) => prev.filter((request) => request.request_id !== requestId));
+    setRequests((prev) => prev.filter((request) => request.pairing_id !== pairingId));
     setUpdatingIds((prev) => {
       const next = new Set(prev);
-      next.delete(requestId);
+      next.delete(pairingId);
       return next;
     });
   }
@@ -176,26 +287,42 @@ export default function MentorDashboard() {
             const formattedDate = Number.isNaN(createdDate.getTime())
               ? request.created_at
               : createdDate.toLocaleString();
-            const isUpdating = updatingIds.has(request.request_id);
+            const isUpdating = updatingIds.has(request.pairing_id);
 
             return (
               <li
-                key={request.request_id}
+                key={request.pairing_id}
                 className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
               >
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-slate-900 dark:text-white">
-                    Student: {request.student_id}
-                  </p>
-                  <p className="text-sm text-slate-600 dark:text-slate-400">
-                    Requested on: {formattedDate}
-                  </p>
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                      {request.studentDisplayName}
+                    </p>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      Requested on: {formattedDate}
+                    </p>
+                  </div>
+                  {request.studentTechStack.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {request.studentTechStack.map((skill) => (
+                        <span
+                          key={skill}
+                          className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500 dark:text-slate-400">No skills listed</p>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <button
                     type="button"
                     disabled={isUpdating}
-                    onClick={() => void handleUpdateStatus(request.request_id, 'Accepted')}
+                    onClick={() => void handleUpdateStatus(request.pairing_id, 'Accepted')}
                     className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     Accept
@@ -203,7 +330,7 @@ export default function MentorDashboard() {
                   <button
                     type="button"
                     disabled={isUpdating}
-                    onClick={() => void handleUpdateStatus(request.request_id, 'Declined')}
+                    onClick={() => void handleUpdateStatus(request.pairing_id, 'Declined')}
                     className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     Decline
