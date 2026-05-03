@@ -17,10 +17,14 @@ function App() {
       <Route path="/register" element={<Register />} />
       <Route element={<ProtectedRoute />}>
         <Route path="/dashboard" element={<DashboardRedirect />} />
-        <Route path="/mentor-dashboard" element={<MentorDashboard />} />
-        <Route path="/student-dashboard" element={<StudentDashboard />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/mentors" element={<MentorsDirectory />} />
+      </Route>
+      <Route element={<ProtectedRoute allowedRoles={['mentor']} />}>
+        <Route path="/mentor-dashboard" element={<MentorDashboard />} />
+      </Route>
+      <Route element={<ProtectedRoute allowedRoles={['student']} />}>
+        <Route path="/student-dashboard" element={<StudentDashboard />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

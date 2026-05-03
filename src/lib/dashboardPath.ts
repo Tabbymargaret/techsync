@@ -26,18 +26,31 @@ export function dashboardPathForRole(role: string): AuthRoute {
  * Returns `/login` when storage is unavailable, missing, corrupted, or role is invalid.
  */
 export function dashboardPathFromStoredUser(): AuthRoute {
+  const role = getStoredUserRole();
+  return role ? dashboardPathForRole(role) : '/login';
+}
+
+/**
+ * Reads the current user's role from `techsync_user` in localStorage.
+ * Returns `'mentor'` or `'student'` when valid, otherwise `null`.
+ */
+export function getStoredUserRole(): 'mentor' | 'student' | null {
   if (typeof localStorage === 'undefined') {
-    return '/login';
+    return null;
   }
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) {
-    return '/login';
+    return null;
   }
   try {
     const user = JSON.parse(raw) as { role?: string };
-    const role = typeof user?.role === 'string' ? user.role : '';
-    return dashboardPathForRole(role);
+    const normalized =
+      typeof user?.role === 'string' ? user.role.trim().toLowerCase() : '';
+    if (normalized === 'mentor' || normalized === 'student') {
+      return normalized;
+    }
+    return null;
   } catch {
-    return '/login';
+    return null;
   }
 }

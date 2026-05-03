@@ -37,6 +37,7 @@ export default function StudentDashboard() {
   const navigate = useNavigate();
   const [currentStudent, setCurrentStudent] = useState<CurrentStudent | null>(null);
   const [currentMentorship, setCurrentMentorship] = useState<CurrentMentorship | null>(null);
+  const [hasActiveMentorship, setHasActiveMentorship] = useState(false);
   const [mentors, setMentors] = useState<MentorWithScore[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
@@ -45,6 +46,7 @@ export default function StudentDashboard() {
 
   const handleMentorRequestSuccess = useCallback((mentorId: string) => {
     setRequestedMentorIds((prev) => new Set(prev).add(mentorId));
+    setHasActiveMentorship(true);
   }, []);
 
   useEffect(() => {
@@ -86,19 +88,41 @@ export default function StudentDashboard() {
 
       const { data: pairingRows } = await supabase
         .from('mentorship_pairing')
-        .select('pairing_id, mentor_id, status')
+        .select('pairing_id, mentor_id, status, created_at')
         .eq('student_id', student.user_id)
-        .in('status', ['Pending', 'Accepted'])
-        .order('created_at', { ascending: false })
-        .limit(1);
+        .order('created_at', { ascending: false });
 
-      const pairing = pairingRows?.[0] ?? null;
+      type PairingRow = {
+        pairing_id?: string;
+        mentor_id?: string;
+        status?: string;
+        created_at?: string;
+      };
+
+      const allPairings = (pairingRows ?? []) as PairingRow[];
+      const activePairings = allPairings.filter((row) => {
+        const status = typeof row.status === 'string' ? row.status.trim().toLowerCase() : '';
+        return status === 'pending' || status === 'accepted';
+      });
+
+      if (activePairings.length > 0) {
+        setHasActiveMentorship(true);
+        const activeMentorIds = activePairings
+          .map((row) => row.mentor_id)
+          .filter((id): id is string => typeof id === 'string');
+        setRequestedMentorIds(new Set(activeMentorIds));
+      } else {
+        setHasActiveMentorship(false);
+        setRequestedMentorIds(new Set());
+      }
+
+      const pairing = activePairings[0] ?? null;
       let mentorship: CurrentMentorship | null = null;
 
       if (pairing) {
-        const pid = (pairing as { pairing_id?: string }).pairing_id;
-        const mid = (pairing as { mentor_id?: string }).mentor_id;
-        const pst = (pairing as { status?: string }).status;
+        const pid = pairing.pairing_id;
+        const mid = pairing.mentor_id;
+        const pst = pairing.status;
         if (typeof pid === 'string' && typeof mid === 'string' && typeof pst === 'string') {
           const { data: mentorUser } = await supabase
             .from('users')
@@ -118,7 +142,6 @@ export default function StudentDashboard() {
       }
 
       setCurrentMentorship(mentorship);
-      setRequestedMentorIds(mentorship ? new Set([mentorship.mentorId]) : new Set());
 
       const { data: mentorRows, error: mentorsError } = await supabase
         .from('users')
@@ -156,7 +179,7 @@ export default function StudentDashboard() {
       .sort((a, b) => b.matchScore - a.matchScore);
   }, [mentors]);
 
-  const mentorshipSlotLocked = currentMentorship !== null;
+  const mentorshipSlotLocked = hasActiveMentorship || currentMentorship !== null;
 
   async function handleCancelMentorship() {
     if (!currentMentorship) return;
@@ -175,6 +198,7 @@ export default function StudentDashboard() {
     }
 
     setCurrentMentorship(null);
+    setHasActiveMentorship(false);
     setRequestedMentorIds(new Set());
   }
 

@@ -27,9 +27,11 @@ export default function MentorsDirectory() {
   const [fetchError, setFetchError] = useState('');
   const [studentUserId, setStudentUserId] = useState('');
   const [requestedMentorIds, setRequestedMentorIds] = useState<Set<string>>(() => new Set());
+  const [hasActiveMentorship, setHasActiveMentorship] = useState(false);
 
   const handleMentorRequestSuccess = useCallback((mentorId: string) => {
     setRequestedMentorIds((prev) => new Set(prev).add(mentorId));
+    setHasActiveMentorship(true);
   }, []);
 
   function handleLogout() {
@@ -64,16 +66,21 @@ export default function MentorsDirectory() {
 
       const { data: requestRows } = await supabase
         .from('mentorship_pairing')
-        .select('mentor_id')
-        .eq('student_id', studentId)
-        .in('status', ['Pending', 'Accepted']);
+        .select('mentor_id, status')
+        .eq('student_id', studentId);
 
       const existingIds = new Set<string>();
+      let foundActive = false;
       for (const row of requestRows ?? []) {
-        const id = (row as { mentor_id?: string }).mentor_id;
-        if (typeof id === 'string') existingIds.add(id);
+        const r = row as { mentor_id?: string; status?: string };
+        const status = typeof r.status === 'string' ? r.status.trim().toLowerCase() : '';
+        if (status === 'pending' || status === 'accepted') {
+          foundActive = true;
+          if (typeof r.mentor_id === 'string') existingIds.add(r.mentor_id);
+        }
       }
       setRequestedMentorIds(existingIds);
+      setHasActiveMentorship(foundActive);
 
       const { data: studentRow, error: studentError } = await supabase
         .from('users')
@@ -155,6 +162,7 @@ export default function MentorsDirectory() {
                   studentId={studentUserId}
                   hasRequested={requestedMentorIds.has(mentor.user_id)}
                   onRequestSuccess={handleMentorRequestSuccess}
+                  requestsGloballyDisabled={hasActiveMentorship}
                 />
               ))}
             </div>
