@@ -4,6 +4,7 @@ import { ArrowRight, Mail, Search, Settings } from 'lucide-react';
 import Navbar from '../components/NavBar.tsx';
 import MentorCard from '../components/MentorCard.tsx';
 import { calculateMatchScore } from '../lib/mentors';
+import { dashboardPathForRole } from '../lib/dashboardPath.ts';
 import { supabase } from '../lib/supabase';
 import type { Database } from '../types/database.types';
 
@@ -13,10 +14,6 @@ type CurrentStudent = Pick<UserRow, 'user_id' | 'full_name' | 'email' | 'role' |
 
 type MentorWithScore = Pick<UserRow, 'user_id' | 'full_name' | 'email' | 'tech_stack'> & {
   matchScore: number;
-};
-
-type StoredUser = {
-  user_id?: string;
 };
 
 const STORAGE_KEY = 'techsync_user';
@@ -30,7 +27,15 @@ type CurrentMentorship = {
 };
 
 function normalizePairingStatus(raw: string): 'Pending' | 'Accepted' {
-  return raw.trim().toLowerCase() === 'accepted' ? 'Accepted' : 'Pending';
+  const s = raw.trim().toLowerCase();
+  if (s === 'accepted' || s === 'active') return 'Accepted';
+  return 'Pending';
+}
+
+function firstNameFromFullName(fullName: string | null | undefined): string {
+  const trimmed = (fullName ?? '').trim();
+  if (!trimmed) return 'Student';
+  return trimmed.split(/\s+/)[0] ?? 'Student';
 }
 
 export default function StudentDashboard() {
@@ -50,45 +55,60 @@ export default function StudentDashboard() {
   useEffect(() => {
     async function loadMentorsAndStudent() {
       setFetchError('');
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (!stored) {
-        navigate('/login', { replace: true });
-        return;
-      }
+      setIsLoading(true);
 
-      let parsed: StoredUser;
-      try {
-        parsed = JSON.parse(stored) as StoredUser;
-      } catch {
-        navigate('/login', { replace: true });
-        return;
-      }
+      const { data: authData, error: authError } = await supabase.auth.getUser();
 
-      if (!parsed.user_id) {
-        navigate('/login', { replace: true });
-        return;
-      }
-
-      const { data: studentRow, error: studentError } = await supabase
-        .from('users')
-        .select('user_id, full_name, email, role, tech_stack')
-        .eq('user_id', parsed.user_id)
-        .single();
-
-      if (studentError || !studentRow) {
-        setFetchError(studentError?.message ?? 'Could not load your profile.');
+      if (authError || !authData.user) {
+        localStorage.removeItem(STORAGE_KEY);
         setIsLoading(false);
+        navigate('/login', { replace: true });
         return;
       }
 
-      const student = studentRow as CurrentStudent;
+      const authId = authData.user.id;
+
+      const { data: userRow, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('user_id', authId)
+        .maybeSingle();
+
+      if (userError || !userRow) {
+        localStorage.removeItem(STORAGE_KEY);
+        setIsLoading(false);
+        navigate('/login', { replace: true });
+        return;
+      }
+
+      const row = userRow as UserRow;
+      const roleNorm = (row.role ?? '').trim().toLowerCase();
+      if (roleNorm !== 'student') {
+        setIsLoading(false);
+        navigate(dashboardPathForRole(row.role ?? ''), { replace: true });
+        return;
+      }
+
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(row));
+      } catch {
+        /* ignore quota / private mode */
+      }
+
+      const student: CurrentStudent = {
+        user_id: row.user_id,
+        full_name: row.full_name,
+        email: row.email,
+        role: row.role,
+        tech_stack: row.tech_stack,
+      };
       setCurrentStudent(student);
 
       const { data: pairingRows } = await supabase
         .from('mentorship_pairing')
         .select('pairing_id, mentor_id, status')
         .eq('student_id', student.user_id)
-        .in('status', ['Pending', 'Accepted'])
+        .in('status', ['Pending', 'Accepted', 'Active'])
         .order('created_at', { ascending: false })
         .limit(1);
 
@@ -123,7 +143,8 @@ export default function StudentDashboard() {
       const { data: mentorRows, error: mentorsError } = await supabase
         .from('users')
         .select('user_id, full_name, email, tech_stack')
-        .eq('role', 'Mentor');
+        .or('role.eq.mentor,role.eq.Mentor')
+        .neq('user_id', student.user_id);
 
       if (mentorsError) {
         setFetchError(mentorsError.message);
@@ -189,8 +210,18 @@ export default function StudentDashboard() {
       <Navbar onLogout={handleLogout} />
       <main className="mx-auto max-w-7xl px-4 pt-24 pb-12">
         {isLoading ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm dark:border-slate-700 dark:bg-gray-800">
-            <p className="text-slate-600 dark:text-slate-400">Loading mentors…</p>
+          <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-700 dark:bg-gray-800">
+            <div className="mx-auto max-w-md space-y-3 text-center">
+              <div
+                className="mx-auto h-7 w-44 max-w-[70%] animate-pulse rounded-lg bg-slate-200 dark:bg-slate-700"
+                aria-hidden
+              />
+              <div
+                className="mx-auto h-4 w-full max-w-sm animate-pulse rounded bg-slate-200 dark:bg-slate-700"
+                aria-hidden
+              />
+              <p className="pt-4 text-sm text-slate-600 dark:text-slate-400">Loading your dashboard…</p>
+            </div>
           </div>
         ) : fetchError ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700 shadow-sm dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-400">
@@ -198,6 +229,11 @@ export default function StudentDashboard() {
           </div>
         ) : (
           <section className="space-y-6">
+            <div className="space-y-1">
+              <p className="text-lg font-medium text-slate-700 dark:text-slate-200 sm:text-xl">
+                Hi {firstNameFromFullName(currentStudent?.full_name)},
+              </p>
+            </div>
             {fetchError && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-400">
                 {fetchError}
@@ -298,6 +334,7 @@ export default function StudentDashboard() {
                     key={mentor.user_id}
                     mentor={mentor}
                     studentId={currentStudent?.user_id ?? ''}
+                    viewerRole={currentStudent?.role ?? ''}
                     hasRequested={requestedMentorIds.has(mentor.user_id)}
                     onRequestSuccess={handleMentorRequestSuccess}
                     requestsGloballyDisabled={mentorshipSlotLocked}
