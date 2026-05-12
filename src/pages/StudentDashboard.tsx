@@ -19,6 +19,11 @@ type MentorWithScore = Pick<UserRow, 'user_id' | 'full_name' | 'email' | 'tech_s
 
 type MilestoneRow = Database['public']['Tables']['milestones']['Row'];
 
+type MentorshipPairingListRow = Pick<
+  Database['public']['Tables']['mentorship_pairing']['Row'],
+  'pairing_id' | 'mentor_id' | 'status' | 'created_at'
+>;
+
 const STORAGE_KEY = 'techsync_user';
 const CELEBRATE_MATCH_KEY = 'celebrate_match';
 
@@ -47,7 +52,6 @@ export default function StudentDashboard() {
   const navigate = useNavigate();
   const [currentStudent, setCurrentStudent] = useState<CurrentStudent | null>(null);
   const [currentMentorship, setCurrentMentorship] = useState<CurrentMentorship | null>(null);
-  const [hasActiveMentorship, setHasActiveMentorship] = useState(false);
   const [mentors, setMentors] = useState<MentorWithScore[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
@@ -61,7 +65,6 @@ export default function StudentDashboard() {
 
   const handleMentorRequestSuccess = useCallback((mentorId: string) => {
     setRequestedMentorIds((prev) => new Set(prev).add(mentorId));
-    setHasActiveMentorship(true);
   }, []);
 
   const loadMentorsAndStudent = useCallback(async () => {
@@ -116,7 +119,7 @@ export default function StudentDashboard() {
       };
       setCurrentStudent(student);
 
-      const { data: pairingRows } = await supabase
+      const { data: pairingRowsRaw } = await supabase
         .from('mentorship_pairing')
         .select('pairing_id, mentor_id, status, created_at')
         .eq('student_id', student.user_id)
@@ -124,6 +127,7 @@ export default function StudentDashboard() {
         .order('created_at', { ascending: false })
         .limit(1);
 
+      const pairingRows = pairingRowsRaw as MentorshipPairingListRow[] | null;
       const pairing = pairingRows?.[0] ?? null;
       let mentorship: CurrentMentorship | null = null;
 
@@ -330,7 +334,6 @@ export default function StudentDashboard() {
     }
 
     setCurrentMentorship(null);
-    setHasActiveMentorship(false);
     setRequestedMentorIds(new Set());
     setMilestones([]);
     await loadMentorsAndStudent();
