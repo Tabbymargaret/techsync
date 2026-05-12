@@ -14,11 +14,16 @@ export type MentorCardData = {
 
 type MentorCardProps = {
   mentor: MentorCardData;
-  /** Logged-in student `user_id` from `techsync_user` (not Supabase Auth). */
+  /** Logged-in user `user_id` from `localStorage` `techsync_user` (see docs/CONTEXT.md). */
   studentId: string;
+  /** `techsync_user.role` — used to block mentor-to-mentor requests. */
+  viewerRole: string;
   hasRequested: boolean;
   onRequestSuccess: (mentorId: string) => void;
-  /** When true, student already has a Pending/Accepted mentorship (one-at-a-time). */
+  /**
+   * When true, the student already has a Pending or Active pairing and cannot send another request.
+   * Do not set for Declined-only (after reset / delete the row, requests work again).
+   */
   requestsGloballyDisabled?: boolean;
 };
 
@@ -31,6 +36,9 @@ export async function insertMentorshipRequest(
   try {
     if (!studentId.trim()) {
       return { error: new Error('You must be logged in to send a request.') };
+    }
+    if (studentId.trim() === mentorId.trim()) {
+      return { error: new Error('You cannot send a mentorship request to yourself.') };
     }
     const payload = {
       student_id: studentId,
@@ -51,6 +59,7 @@ export async function insertMentorshipRequest(
 export default function MentorCard({
   mentor,
   studentId,
+  viewerRole,
   hasRequested,
   onRequestSuccess,
   requestsGloballyDisabled = false,
@@ -60,6 +69,8 @@ export default function MentorCard({
     null
   );
 
+  const isViewerMentor = viewerRole.trim().toLowerCase() === 'mentor';
+
   useEffect(() => {
     if (!toast) return;
     const t = window.setTimeout(() => setToast(null), TOAST_MS);
@@ -67,6 +78,8 @@ export default function MentorCard({
   }, [toast]);
 
   const handleSendRequest = useCallback(async () => {
+    if (studentId.trim() === mentor.user_id.trim()) return;
+    if (isViewerMentor) return;
     if (hasRequested || isSubmitting || requestsGloballyDisabled) return;
     setIsSubmitting(true);
     try {
@@ -103,6 +116,7 @@ export default function MentorCard({
   }, [
     hasRequested,
     isSubmitting,
+    isViewerMentor,
     requestsGloballyDisabled,
     mentor.email,
     mentor.user_id,
@@ -151,30 +165,36 @@ export default function MentorCard({
           ))
         )}
       </div>
-      <button
-        type="button"
-        onClick={handleSendRequest}
-        disabled={disabled}
-        className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
-          requested || slotBlocksOtherMentors
-            ? 'cursor-not-allowed bg-slate-300 text-slate-600 opacity-75 dark:bg-slate-600 dark:text-slate-300'
-            : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500 hover:cursor-pointer disabled:cursor-not-allowed disabled:opacity-70 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-500 dark:focus:ring-blue-400'
-        }`}
-      >
-        {requested ? (
-          <>
-            <Check className="h-4 w-4 shrink-0" aria-hidden />
-            Request Sent
-          </>
-        ) : slotBlocksOtherMentors ? (
-          <>One mentorship at a time</>
-        ) : (
-          <>
-            <UserPlus className="h-4 w-4 shrink-0" aria-hidden />
-            {isSubmitting ? 'Sending…' : 'Request Mentorship'}
-          </>
-        )}
-      </button>
+      {isViewerMentor ? (
+        <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-center text-xs font-medium text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
+          View Profile Only
+        </p>
+      ) : (
+        <button
+          type="button"
+          onClick={handleSendRequest}
+          disabled={disabled}
+          className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
+            requested || slotBlocksOtherMentors
+              ? 'cursor-not-allowed bg-slate-300 text-slate-600 opacity-75 dark:bg-slate-600 dark:text-slate-300'
+              : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500 hover:cursor-pointer disabled:cursor-not-allowed disabled:opacity-70 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-500 dark:focus:ring-blue-400'
+          }`}
+        >
+          {requested ? (
+            <>
+              <Check className="h-4 w-4 shrink-0" aria-hidden />
+              Request Sent
+            </>
+          ) : slotBlocksOtherMentors ? (
+            <>One mentorship at a time</>
+          ) : (
+            <>
+              <UserPlus className="h-4 w-4 shrink-0" aria-hidden />
+              {isSubmitting ? 'Sending…' : 'Request Mentorship'}
+            </>
+          )}
+        </button>
+      )}
     </div>
   );
 }

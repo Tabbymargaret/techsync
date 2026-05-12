@@ -14,11 +14,34 @@ type MentorRow = Pick<UserRow, 'user_id' | 'full_name' | 'email' | 'tech_stack'>
 
 type MentorWithScore = MentorRow & { matchScore: number };
 
-type StoredUser = {
+/** Shape stored under `techsync_user` (see docs/CONTEXT.md) */
+type TechsyncUser = Partial<UserRow> & {
   user_id?: string;
 };
 
 const STORAGE_KEY = 'techsync_user';
+
+function parseTechsyncUser(raw: string): TechsyncUser | null {
+  try {
+    const u = JSON.parse(raw) as TechsyncUser;
+    if (typeof u.user_id !== 'string' || !u.user_id.trim()) {
+      return null;
+    }
+    return u;
+  } catch {
+    return null;
+  }
+}
+
+/** Established mentorship — mentor must not appear in directory (gatekeeper). */
+function isActiveMentorshipStatus(status: string): boolean {
+  const s = status.trim().toLowerCase();
+  return s === 'active' || s === 'accepted';
+}
+
+function isPendingStatus(status: string): boolean {
+  return status.trim().toLowerCase() === 'pending';
+}
 
 export default function MentorsDirectory() {
   const navigate = useNavigate();
@@ -26,12 +49,14 @@ export default function MentorsDirectory() {
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
   const [studentUserId, setStudentUserId] = useState('');
+  const [viewerRole, setViewerRole] = useState('');
   const [requestedMentorIds, setRequestedMentorIds] = useState<Set<string>>(() => new Set());
-  const [hasActiveMentorship, setHasActiveMentorship] = useState(false);
+  /** Pending or active pairing — disables requesting other mentors (same as StudentDashboard). */
+  const [mentorshipSlotLocked, setMentorshipSlotLocked] = useState(false);
 
   const handleMentorRequestSuccess = useCallback((mentorId: string) => {
     setRequestedMentorIds((prev) => new Set(prev).add(mentorId));
-    setHasActiveMentorship(true);
+    setMentorshipSlotLocked(true);
   }, []);
 
   function handleLogout() {
@@ -48,39 +73,38 @@ export default function MentorsDirectory() {
         return;
       }
 
-      let parsed: StoredUser;
-      try {
-        parsed = JSON.parse(stored) as StoredUser;
-      } catch {
+      const currentUser = parseTechsyncUser(stored);
+      if (!currentUser?.user_id) {
         navigate('/login', { replace: true });
         return;
       }
 
-      if (!parsed.user_id) {
-        navigate('/login', { replace: true });
-        return;
-      }
-
-      const studentId = parsed.user_id;
+      const studentId = currentUser.user_id;
       setStudentUserId(studentId);
+      setViewerRole(typeof currentUser.role === 'string' ? currentUser.role : '');
 
-      const { data: requestRows } = await supabase
+      const { data: pairingRows } = await supabase
         .from('mentorship_pairing')
         .select('mentor_id, status')
-        .eq('student_id', studentId);
+        .eq('student_id', studentId)
+        .in('status', ['Pending', 'Accepted', 'Active']);
 
-      const existingIds = new Set<string>();
-      let foundActive = false;
-      for (const row of requestRows ?? []) {
-        const r = row as { mentor_id?: string; status?: string };
-        const status = typeof r.status === 'string' ? r.status.trim().toLowerCase() : '';
-        if (status === 'pending' || status === 'accepted') {
-          foundActive = true;
-          if (typeof r.mentor_id === 'string') existingIds.add(r.mentor_id);
+      const gatekeeperMentorIds = new Set<string>();
+      const pendingMentorIds = new Set<string>();
+      for (const row of pairingRows ?? []) {
+        const id = (row as { mentor_id?: string }).mentor_id;
+        const st = (row as { status?: string }).status;
+        if (typeof id !== 'string') continue;
+        if (typeof st === 'string') {
+          if (isActiveMentorshipStatus(st)) {
+            gatekeeperMentorIds.add(id);
+          } else if (isPendingStatus(st)) {
+            pendingMentorIds.add(id);
+          }
         }
       }
-      setRequestedMentorIds(existingIds);
-      setHasActiveMentorship(foundActive);
+      setRequestedMentorIds(pendingMentorIds);
+      setMentorshipSlotLocked(pendingMentorIds.size > 0 || gatekeeperMentorIds.size > 0);
 
       const { data: studentRow, error: studentError } = await supabase
         .from('users')
@@ -96,7 +120,9 @@ export default function MentorsDirectory() {
       const { data: mentorRows, error: mentorsError } = await supabase
         .from('users')
         .select('user_id, full_name, email, tech_stack')
-        .eq('role', 'Mentor');
+        // Mentors only: lowercase + Register.tsx title-case; exclude current user (no self in directory)
+        .or('role.eq.mentor,role.eq.Mentor')
+        .neq('user_id', currentUser.user_id);
 
       if (mentorsError) {
         setFetchError(mentorsError.message);
@@ -105,10 +131,12 @@ export default function MentorsDirectory() {
       }
 
       const raw = (mentorRows ?? []) as MentorRow[];
-      const withScores: MentorWithScore[] = raw.map((mentor) => ({
-        ...mentor,
-        matchScore: calculateMatchScore(studentStack, mentor.tech_stack ?? []),
-      }));
+      const withScores: MentorWithScore[] = raw
+        .filter((mentor) => !gatekeeperMentorIds.has(mentor.user_id))
+        .map((mentor) => ({
+          ...mentor,
+          matchScore: calculateMatchScore(studentStack, mentor.tech_stack ?? []),
+        }));
 
       withScores.sort((a, b) => b.matchScore - a.matchScore);
       setMentors(withScores);
@@ -160,9 +188,10 @@ export default function MentorsDirectory() {
                   key={mentor.user_id}
                   mentor={mentor}
                   studentId={studentUserId}
+                  viewerRole={viewerRole}
                   hasRequested={requestedMentorIds.has(mentor.user_id)}
                   onRequestSuccess={handleMentorRequestSuccess}
-                  requestsGloballyDisabled={hasActiveMentorship}
+                  requestsGloballyDisabled={mentorshipSlotLocked}
                 />
               ))}
             </div>
