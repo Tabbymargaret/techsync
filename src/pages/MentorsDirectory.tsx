@@ -51,9 +51,12 @@ export default function MentorsDirectory() {
   const [studentUserId, setStudentUserId] = useState('');
   const [viewerRole, setViewerRole] = useState('');
   const [requestedMentorIds, setRequestedMentorIds] = useState<Set<string>>(() => new Set());
+  /** Pending or active pairing — disables requesting other mentors (same as StudentDashboard). */
+  const [mentorshipSlotLocked, setMentorshipSlotLocked] = useState(false);
 
   const handleMentorRequestSuccess = useCallback((mentorId: string) => {
     setRequestedMentorIds((prev) => new Set(prev).add(mentorId));
+    setMentorshipSlotLocked(true);
   }, []);
 
   function handleLogout() {
@@ -101,6 +104,7 @@ export default function MentorsDirectory() {
         }
       }
       setRequestedMentorIds(pendingMentorIds);
+      setMentorshipSlotLocked(pendingMentorIds.size > 0 || gatekeeperMentorIds.size > 0);
 
       const { data: studentRow, error: studentError } = await supabase
         .from('users')
@@ -187,6 +191,7 @@ export default function MentorsDirectory() {
                   viewerRole={viewerRole}
                   hasRequested={requestedMentorIds.has(mentor.user_id)}
                   onRequestSuccess={handleMentorRequestSuccess}
+                  requestsGloballyDisabled={mentorshipSlotLocked}
                 />
               ))}
             </div>

@@ -20,7 +20,10 @@ type MentorCardProps = {
   viewerRole: string;
   hasRequested: boolean;
   onRequestSuccess: (mentorId: string) => void;
-  /** When true, student already has a Pending/Accepted mentorship (one-at-a-time). */
+  /**
+   * When true, the student already has a Pending or Active pairing and cannot send another request.
+   * Do not set for Declined-only (after reset / delete the row, requests work again).
+   */
   requestsGloballyDisabled?: boolean;
 };
 
