@@ -131,10 +131,6 @@ export default function MentorDashboard() {
   const [toast, setToast] = useState<{ type: 'success'; message: string } | null>(null);
   const [activeMentees, setActiveMentees] = useState<ActiveMentee[]>([]);
   const [activeMenteesLoading, setActiveMenteesLoading] = useState(false);
-  const [roadmapPairingId, setRoadmapPairingId] = useState<string | null>(null);
-  const [newMilestoneTitle, setNewMilestoneTitle] = useState('');
-  const [milestoneBusyPairingId, setMilestoneBusyPairingId] = useState<string | null>(null);
-  const [deletingMilestoneId, setDeletingMilestoneId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!toast) return;
@@ -406,66 +402,6 @@ export default function MentorDashboard() {
     [loadActiveMentees, loadPendingRequests]
   );
 
-  const handleAddMilestone = useCallback(
-    async (pairingId: string) => {
-      const title = newMilestoneTitle.trim();
-      if (!title) return;
-      setMilestoneBusyPairingId(pairingId);
-      setErrorMessage('');
-      const due = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
-      const payload: Database['public']['Tables']['milestones']['Insert'] = {
-        pairing_id: pairingId,
-        title,
-        description: null,
-        due_date: due,
-        progress_status: 'Not Started',
-        is_completed: false,
-      };
-      try {
-        const { data, error } = await supabase
-          .from('milestones')
-          .insert(payload as never)
-          .select()
-          .single();
-        if (error) {
-          setErrorMessage(error.message);
-          return;
-        }
-        const row = data as MilestoneRow;
-        setActiveMentees((prev) =>
-          prev.map((m) =>
-            m.pairing_id === pairingId ? { ...m, milestones: [...m.milestones, row] } : m
-          )
-        );
-        setNewMilestoneTitle('');
-      } finally {
-        setMilestoneBusyPairingId(null);
-      }
-    },
-    [newMilestoneTitle]
-  );
-
-  const handleDeleteMilestone = useCallback(async (pairingId: string, milestoneId: string) => {
-    setDeletingMilestoneId(milestoneId);
-    setErrorMessage('');
-    try {
-      const { error } = await supabase.from('milestones').delete().eq('milestone_id', milestoneId);
-      if (error) {
-        setErrorMessage(error.message);
-        return;
-      }
-      setActiveMentees((prev) =>
-        prev.map((m) =>
-          m.pairing_id === pairingId
-            ? { ...m, milestones: m.milestones.filter((x) => x.milestone_id !== milestoneId) }
-            : m
-        )
-      );
-    } finally {
-      setDeletingMilestoneId(null);
-    }
-  }, []);
-
   async function handleLogout() {
     localStorage.removeItem(STORAGE_KEY);
     await supabase.auth.signOut();
@@ -653,100 +589,28 @@ export default function MentorDashboard() {
               ) : (
                 <ul className="space-y-4">
                   {activeMentees.map((mentee) => {
-                    const isRoadmapOpen = roadmapPairingId === mentee.pairing_id;
-                    const isAdding = milestoneBusyPairingId === mentee.pairing_id;
+                    const completedCount = mentee.milestones.filter((m) => m.is_completed).length;
+                    const totalCount = mentee.milestones.length;
                     return (
-                      <li
-                        key={mentee.pairing_id}
-                        className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-gray-800"
-                      >
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="min-w-0">
-                            <p className="text-base font-semibold text-slate-900 dark:text-white">
-                              {mentee.studentDisplayName}
-                            </p>
-                            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                              {mentee.milestones.length} milestone
-                              {mentee.milestones.length === 1 ? '' : 's'}
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setNewMilestoneTitle('');
-                              setRoadmapPairingId((openId) =>
-                                openId === mentee.pairing_id ? null : mentee.pairing_id
-                              );
-                            }}
-                            className="shrink-0 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-gray-800 dark:text-slate-200 dark:hover:bg-slate-700/50"
-                          >
-                            {isRoadmapOpen ? 'Close Roadmap' : 'Manage Roadmap'}
-                          </button>
-                        </div>
-
-                        {mentee.milestones.length > 0 && (
-                          <ul className="mt-4 space-y-2 border-t border-slate-100 pt-4 dark:border-slate-700/80">
-                            {mentee.milestones.map((ms) => {
-                              const isDeleting = deletingMilestoneId === ms.milestone_id;
-                              return (
-                                <li
-                                  key={ms.milestone_id}
-                                  className="flex flex-wrap items-center justify-between gap-2 text-sm"
-                                >
-                                  <span className="font-medium text-slate-800 dark:text-slate-200">
-                                    {ms.title}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    disabled={isDeleting}
-                                    onClick={() => void handleDeleteMilestone(mentee.pairing_id, ms.milestone_id)}
-                                    className="rounded-md border border-red-200 px-2.5 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
-                                  >
-                                    {isDeleting ? '…' : 'Delete'}
-                                  </button>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        )}
-
-                        {isRoadmapOpen && (
-                          <div className="mt-4 space-y-3 rounded-lg border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-600 dark:bg-slate-800/50">
-                            <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                              Add milestone
-                            </p>
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                              <label htmlFor={`milestone-title-${mentee.pairing_id}`} className="sr-only">
-                                Milestone title
-                              </label>
-                              <input
-                                id={`milestone-title-${mentee.pairing_id}`}
-                                type="text"
-                                value={newMilestoneTitle}
-                                onChange={(e) => setNewMilestoneTitle(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    void handleAddMilestone(mentee.pairing_id);
-                                  }
-                                }}
-                                placeholder="Milestone Title"
-                                className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-gray-900 dark:text-white dark:placeholder:text-slate-500"
-                              />
-                              <button
-                                type="button"
-                                disabled={isAdding || !newMilestoneTitle.trim()}
-                                onClick={() => void handleAddMilestone(mentee.pairing_id)}
-                                className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                {isAdding ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                                ) : null}
-                                Add
-                              </button>
+                      <li key={mentee.pairing_id}>
+                        <Link
+                          to={`/milestones/${mentee.pairing_id}`}
+                          className="block rounded-xl border border-slate-200 bg-white p-5 shadow-sm outline-none transition hover:border-slate-300 hover:bg-slate-50/80 focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 dark:border-slate-700 dark:bg-gray-800 dark:hover:border-slate-600 dark:hover:bg-slate-800/80 dark:focus-visible:ring-slate-500"
+                        >
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0">
+                              <p className="text-base font-semibold text-slate-900 dark:text-white">
+                                {mentee.studentDisplayName}
+                              </p>
+                              <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                                {completedCount} of {totalCount} complete
+                              </p>
                             </div>
+                            <span className="shrink-0 text-sm font-semibold text-blue-600 dark:text-sky-400">
+                              View roadmap
+                            </span>
                           </div>
-                        )}
+                        </Link>
                       </li>
                     );
                   })}

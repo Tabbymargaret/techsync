@@ -5,6 +5,7 @@ import Login from './pages/Login.tsx';
 import Register from './pages/Register.tsx';
 import DashboardRedirect from './pages/DashboardRedirect.tsx';
 import MentorDashboard from './pages/MentorDashboard.tsx';
+import MilestoneTimeline from './pages/MilestoneTimeline.tsx';
 import StudentDashboard from './pages/StudentDashboard.tsx';
 import Profile from './pages/Profile.tsx';
 import MentorsDirectory from './pages/MentorsDirectory.tsx';
@@ -22,6 +23,7 @@ function App() {
       </Route>
       <Route element={<ProtectedRoute allowedRoles={['mentor']} />}>
         <Route path="/mentor-dashboard" element={<MentorDashboard />} />
+        <Route path="/milestones/:pairingId" element={<MilestoneTimeline />} />
       </Route>
       <Route element={<ProtectedRoute allowedRoles={['student']} />}>
         <Route path="/student-dashboard" element={<StudentDashboard />} />
