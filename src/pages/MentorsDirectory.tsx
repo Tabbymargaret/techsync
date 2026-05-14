@@ -10,7 +10,7 @@ import type { Database } from '../types/database.types';
 
 type UserRow = Database['public']['Tables']['users']['Row'];
 
-type MentorRow = Pick<UserRow, 'user_id' | 'full_name' | 'email' | 'tech_stack'>;
+type MentorRow = Pick<UserRow, 'user_id' | 'full_name' | 'email' | 'tech_stack' | 'weekly_availability'>;
 
 type MentorWithScore = MentorRow & { matchScore: number };
 
@@ -119,7 +119,7 @@ export default function MentorsDirectory() {
 
       const { data: mentorRows, error: mentorsError } = await supabase
         .from('users')
-        .select('user_id, full_name, email, tech_stack')
+        .select('user_id, full_name, email, tech_stack, weekly_availability')
         // Mentors only: lowercase + Register.tsx title-case; exclude current user (no self in directory)
         .or('role.eq.mentor,role.eq.Mentor')
         .neq('user_id', currentUser.user_id);

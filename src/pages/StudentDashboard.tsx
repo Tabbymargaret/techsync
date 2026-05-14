@@ -4,20 +4,22 @@ import { ArrowRight, Mail, Search, Settings, Trophy, X } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import Navbar from '../components/NavBar.tsx';
 import MentorCard from '../components/MentorCard.tsx';
+import MentorWeeklyAvailability from '../components/MentorWeeklyAvailability.tsx';
 import { calculateMatchScore } from '../lib/mentors';
 import { dashboardPathForRole } from '../lib/dashboardPath.ts';
 import { supabase } from '../lib/supabase';
-import type { Database } from '../types/database.types';
+import type { Database, Json } from '../types/database.types';
 
 type UserRow = Database['public']['Tables']['users']['Row'];
 
 type CurrentStudent = Pick<UserRow, 'user_id' | 'full_name' | 'email' | 'role' | 'tech_stack'>;
 
-type MentorWithScore = Pick<UserRow, 'user_id' | 'full_name' | 'email' | 'tech_stack'> & {
+type MentorWithScore = Pick<
+  UserRow,
+  'user_id' | 'full_name' | 'email' | 'tech_stack' | 'weekly_availability'
+> & {
   matchScore: number;
 };
-
-type MilestoneRow = Database['public']['Tables']['milestones']['Row'];
 
 type MentorshipPairingListRow = Pick<
   Database['public']['Tables']['mentorship_pairing']['Row'],
@@ -33,6 +35,7 @@ type CurrentMentorship = {
   status: 'Pending' | 'Active' | 'Declined';
   mentorName: string;
   mentorEmail: string;
+  mentorWeeklyAvailability: Json | null;
 };
 
 function normalizePairingStatus(raw: string): 'Pending' | 'Active' | 'Declined' {
@@ -40,18 +43,6 @@ function normalizePairingStatus(raw: string): 'Pending' | 'Active' | 'Declined' 
   if (s === 'accepted' || s === 'active') return 'Active';
   if (s === 'declined') return 'Declined';
   return 'Pending';
-}
-
-function milestoneStudentSummary(m: MilestoneRow): string {
-  const st = (m.progress_status ?? '').trim().toLowerCase().replace(/_/g, ' ');
-  if (st === 'completed') return 'Completed';
-  if (st.includes('needs review')) return 'Needs mentor review';
-  if (st.includes('in progress')) return 'In progress';
-  return 'Pending';
-}
-
-function milestoneDone(m: MilestoneRow): boolean {
-  return (m.progress_status ?? '').trim().toLowerCase().replace(/_/g, ' ') === 'completed';
 }
 
 function firstNameFromFullName(fullName: string | null | undefined): string {
@@ -72,7 +63,6 @@ export default function StudentDashboard() {
   const [isCancellingMentorship, setIsCancellingMentorship] = useState(false);
   const [isClearingDeclined, setIsClearingDeclined] = useState(false);
   const [showCelebrateModal, setShowCelebrateModal] = useState(false);
-  const [milestones, setMilestones] = useState<MilestoneRow[]>([]);
 
   const handleMentorRequestSuccess = useCallback((mentorId: string) => {
     setRequestedMentorIds((prev) => new Set(prev).add(mentorId));
@@ -149,17 +139,19 @@ export default function StudentDashboard() {
         if (typeof pid === 'string' && typeof mid === 'string' && typeof pst === 'string') {
           const { data: mentorUser } = await supabase
             .from('users')
-            .select('user_id, full_name, email')
+            .select('user_id, full_name, email, weekly_availability')
             .eq('user_id', mid)
             .maybeSingle();
 
-          const mu = mentorUser as Pick<UserRow, 'user_id' | 'full_name' | 'email'> | null;
+          const mu =
+            mentorUser as Pick<UserRow, 'user_id' | 'full_name' | 'email' | 'weekly_availability'> | null;
           mentorship = {
             pairingId: pid,
             mentorId: mid,
             status: normalizePairingStatus(pst),
             mentorName: mu?.full_name?.trim() || 'Mentor',
             mentorEmail: mu?.email ?? '',
+            mentorWeeklyAvailability: mu?.weekly_availability ?? null,
           };
         }
       }
@@ -174,22 +166,6 @@ export default function StudentDashboard() {
         }
       }
 
-      let milestoneRows: MilestoneRow[] = [];
-      if (mentorship?.status === 'Active') {
-        const { data: ms } = await supabase
-          .from('milestones')
-          .select('*')
-          .eq('pairing_id', mentorship.pairingId)
-          .order('created_at', { ascending: true });
-        milestoneRows = (ms ?? []) as MilestoneRow[];
-        milestoneRows = milestoneRows.map((m) => ({
-          ...m,
-          evidence_url: m.evidence_url ?? null,
-          feedback_text: m.feedback_text ?? null,
-        }));
-      }
-      setMilestones(milestoneRows);
-
       setCurrentMentorship(mentorship);
       if (mentorship && (mentorship.status === 'Pending' || mentorship.status === 'Active')) {
         setRequestedMentorIds(new Set([mentorship.mentorId]));
@@ -199,7 +175,7 @@ export default function StudentDashboard() {
 
       const { data: mentorRows, error: mentorsError } = await supabase
         .from('users')
-        .select('user_id, full_name, email, tech_stack')
+        .select('user_id, full_name, email, tech_stack, weekly_availability')
         .or('role.eq.mentor,role.eq.Mentor')
         .neq('user_id', student.user_id);
 
@@ -212,7 +188,7 @@ export default function StudentDashboard() {
       const studentStack = student.tech_stack ?? [];
       const rawMentors = (mentorRows ?? []) as Pick<
         UserRow,
-        'user_id' | 'full_name' | 'email' | 'tech_stack'
+        'user_id' | 'full_name' | 'email' | 'tech_stack' | 'weekly_availability'
       >[];
 
       const withScores: MentorWithScore[] = rawMentors.map((mentor) => ({
@@ -275,12 +251,6 @@ export default function StudentDashboard() {
     (currentMentorship?.status === 'Pending' || currentMentorship?.status === 'Active') ||
     requestedMentorIds.size > 0;
 
-  const milestoneProgressPercent = useMemo(() => {
-    if (milestones.length === 0) return 0;
-    const done = milestones.filter((m) => milestoneDone(m)).length;
-    return Math.round((done / milestones.length) * 100);
-  }, [milestones]);
-
   async function handleResetAndTryAgain() {
     if (!currentMentorship || currentMentorship.status !== 'Declined') return;
     setIsClearingDeclined(true);
@@ -296,7 +266,6 @@ export default function StudentDashboard() {
     }
     setCurrentMentorship(null);
     setRequestedMentorIds(new Set());
-    setMilestones([]);
     await loadMentorsAndStudent();
   }
 
@@ -318,7 +287,6 @@ export default function StudentDashboard() {
 
     setCurrentMentorship(null);
     setRequestedMentorIds(new Set());
-    setMilestones([]);
     await loadMentorsAndStudent();
   }
 
@@ -365,12 +333,21 @@ export default function StudentDashboard() {
 
             {currentMentorship &&
               (currentMentorship.status === 'Pending' || currentMentorship.status === 'Active') && (
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-gray-800 sm:p-8">
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                  Current Mentorship
-                </h2>
-                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0 space-y-2">
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-gray-800">
+                <Link
+                  to={`/mentorship/${currentMentorship.pairingId}`}
+                  className="block p-6 transition hover:bg-slate-50/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:p-8"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                      Current Mentorship
+                    </h2>
+                    <ArrowRight
+                      className="h-5 w-5 shrink-0 text-blue-600 dark:text-sky-400"
+                      aria-hidden
+                    />
+                  </div>
+                  <div className="mt-4 space-y-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-base font-medium text-slate-900 dark:text-white">
                         Mentor: {currentMentorship.mentorName}
@@ -388,82 +365,38 @@ export default function StudentDashboard() {
                     {currentMentorship.status === 'Active' && currentMentorship.mentorEmail && (
                       <p className="flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                         <Mail className="h-4 w-4 shrink-0 text-slate-500 dark:text-slate-500" aria-hidden />
-                        <a
-                          href={`mailto:${currentMentorship.mentorEmail}`}
-                          className="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+                        <span
+                          onClick={(e) => e.preventDefault()}
+                          className="inline-flex"
                         >
-                          {currentMentorship.mentorEmail}
-                        </a>
+                          <a
+                            href={`mailto:${currentMentorship.mentorEmail}`}
+                            className="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+                          >
+                            {currentMentorship.mentorEmail}
+                          </a>
+                        </span>
                       </p>
                     )}
+                    <MentorWeeklyAvailability
+                      value={currentMentorship.mentorWeeklyAvailability ?? null}
+                      className="mt-1"
+                    />
+                    <p className="text-sm font-semibold text-blue-600 dark:text-sky-400">
+                      Open mentorship hub — milestones &amp; live sync
+                    </p>
                   </div>
+                </Link>
+                <div className="flex justify-end border-t border-slate-200 bg-slate-50/80 px-6 py-3 dark:border-slate-600 dark:bg-slate-900/30 sm:px-8">
                   <button
                     type="button"
                     onClick={() => void handleCancelMentorship()}
                     disabled={isCancellingMentorship}
-                    className="shrink-0 rounded-lg border border-red-300 bg-transparent px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/40"
+                    className="rounded-lg border border-red-300 bg-transparent px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/40"
                   >
                     {isCancellingMentorship ? 'Cancelling…' : 'Cancel Mentorship'}
                   </button>
                 </div>
-
-                {currentMentorship.status === 'Active' && (
-                  <div className="mt-6 border-t border-slate-200 pt-6 dark:border-slate-600">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Your roadmap</h3>
-                      <Link
-                        to={`/milestones/${currentMentorship.pairingId}`}
-                        className="text-sm font-semibold text-blue-600 underline-offset-2 hover:underline dark:text-sky-400"
-                      >
-                        Milestone timeline — submit evidence
-                      </Link>
-                    </div>
-                    {milestones.length === 0 ? (
-                      <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-                        Your mentor hasn&apos;t added milestones yet. Check back soon.
-                      </p>
-                    ) : (
-                      <>
-                        <div className="mt-3">
-                          <div className="mb-1 flex justify-between text-xs font-medium text-slate-600 dark:text-slate-400">
-                            <span>Progress</span>
-                            <span>
-                              {milestones.filter((m) => milestoneDone(m)).length} / {milestones.length}{' '}
-                              completed
-                            </span>
-                          </div>
-                          <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-                            <div
-                              className="h-full rounded-full bg-blue-600 transition-all duration-300 dark:bg-blue-500"
-                              style={{ width: `${milestoneProgressPercent}%` }}
-                            />
-                          </div>
-                        </div>
-                        <ul className="mt-4 space-y-3">
-                          {milestones.map((m) => (
-                            <li
-                              key={m.milestone_id}
-                              className="flex items-start justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2 dark:border-slate-700 dark:bg-slate-900/40"
-                            >
-                              <p
-                                className={`min-w-0 text-sm leading-snug ${
-                                  milestoneDone(m)
-                                    ? 'font-medium text-slate-500 line-through dark:text-slate-400'
-                                    : 'font-medium text-slate-800 dark:text-slate-200'
-                                }`}
-                              >
-                                {m.title}
-                              </p>
-                              <span className="shrink-0 text-xs font-semibold text-slate-600 dark:text-slate-400">
-                                {milestoneStudentSummary(m)}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </>
-                    )}
-                  </div>
-                )}
               </div>
             )}
 

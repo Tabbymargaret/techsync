@@ -1,22 +1,45 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { dashboardPathFromStoredUser } from '../lib/dashboardPath';
+import { dashboardPathForRole } from '../lib/dashboardPath';
+import { ensureAppUserAndProfileFromSession } from '../lib/ensureSessionAndProfile';
 import { supabase } from '../lib/supabase';
 
 /**
- * Redirects `/dashboard` using `techsync_user`, or to `/login` when data is missing or invalid.
+ * OAuth returns here first; establishes session, syncs profile, then sends users to role home.
+ * Otherwise behaves like a session-based gate (no valid session → login).
  */
 export default function DashboardRedirect() {
   const navigate = useNavigate();
 
   useEffect(() => {
     async function run() {
-      const path = dashboardPathFromStoredUser();
-      if (path === '/login') {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        localStorage.removeItem('techsync_user');
+        navigate('/login', { replace: true });
+        return;
+      }
+
+      const userRow = await ensureAppUserAndProfileFromSession();
+      if (!userRow) {
         localStorage.removeItem('techsync_user');
         await supabase.auth.signOut();
+        navigate('/login', { replace: true });
+        return;
       }
-      navigate(path, { replace: true });
+
+      const next = dashboardPathForRole(userRow.role);
+      if (next === '/login') {
+        localStorage.removeItem('techsync_user');
+        await supabase.auth.signOut();
+        navigate('/login', { replace: true });
+        return;
+      }
+
+      navigate(next, { replace: true });
     }
     void run();
   }, [navigate]);

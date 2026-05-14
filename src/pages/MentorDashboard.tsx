@@ -597,7 +597,7 @@ export default function MentorDashboard() {
                     return (
                       <li key={mentee.pairing_id}>
                         <Link
-                          to={`/milestones/${mentee.pairing_id}`}
+                          to={`/mentorship/${mentee.pairing_id}`}
                           className="block rounded-xl border border-slate-200 bg-white p-5 shadow-sm outline-none transition hover:border-slate-300 hover:bg-slate-50/80 focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 dark:border-slate-700 dark:bg-gray-800 dark:hover:border-slate-600 dark:hover:bg-slate-800/80 dark:focus-visible:ring-slate-500"
                         >
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -610,7 +610,7 @@ export default function MentorDashboard() {
                               </p>
                             </div>
                             <span className="shrink-0 text-sm font-semibold text-blue-600 dark:text-sky-400">
-                              View roadmap
+                              Open hub
                             </span>
                           </div>
                         </Link>

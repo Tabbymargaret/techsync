@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import Navbar from '../components/NavBar.tsx';
 import { dashboardPathForRole, dashboardPathFromStoredUser } from '../lib/dashboardPath';
 import { supabase } from '../lib/supabase';
-import type { Database } from '../types/database.types';
+import {
+  parseWeeklyAvailability,
+  sortWeeklySlots,
+  slotsToJson,
+  WEEKDAY_OPTIONS,
+} from '../lib/weeklyAvailability';
+import type { WeeklyAvailabilitySlot, Weekday } from '../lib/weeklyAvailability';
+import type { Database, Json } from '../types/database.types';
 import type { PostgrestError } from '@supabase/supabase-js';
 
 type StoredUser = {
@@ -74,6 +81,7 @@ export default function Profile() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [availabilitySlots, setAvailabilitySlots] = useState<WeeklyAvailabilitySlot[]>([]);
 
   const toastClassName = useMemo(
     () =>
@@ -89,6 +97,8 @@ export default function Profile() {
     }
     return dashboardPathFromStoredUser();
   }, [role]);
+
+  const isMentor = useMemo(() => role.trim().toLowerCase() === 'mentor', [role]);
 
   const dashboardBackLabel =
     dashboardBackPath === '/login' ? 'Back to sign in' : 'Back to dashboard';
@@ -128,7 +138,7 @@ export default function Profile() {
 
       const { data, error: queryError } = await supabase
         .from('users')
-        .select('email, role, tech_stack')
+        .select('email, role, tech_stack, weekly_availability')
         .eq('user_id', parsed.user_id)
         .single();
 
@@ -143,10 +153,17 @@ export default function Profile() {
         return;
       }
 
-      const typedData = data as Pick<UserRow, 'email' | 'role' | 'tech_stack'>;
+      const typedData = data as Pick<UserRow, 'email' | 'role' | 'tech_stack' | 'weekly_availability'>;
       setEmail(typedData.email);
       setRole(typedData.role);
       setSelectedSkills(normalizeSkillsFromSources(typedData.tech_stack, storedTechStack));
+      if ((typedData.role ?? '').trim().toLowerCase() === 'mentor') {
+        setAvailabilitySlots(
+          sortWeeklySlots(parseWeeklyAvailability(typedData.weekly_availability ?? null))
+        );
+      } else {
+        setAvailabilitySlots([]);
+      }
       setIsPageLoading(false);
     }
 
@@ -158,6 +175,23 @@ export default function Profile() {
     const timeout = window.setTimeout(() => setToast(null), 2500);
     return () => window.clearTimeout(timeout);
   }, [toast]);
+
+  function addAvailabilityRow() {
+    setAvailabilitySlots((prev) => [
+      ...prev,
+      { day: 'monday' as Weekday, start: '09:00', end: '12:00' },
+    ]);
+  }
+
+  function removeAvailabilityRow(index: number) {
+    setAvailabilitySlots((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function updateAvailabilitySlot(index: number, partial: Partial<WeeklyAvailabilitySlot>) {
+    setAvailabilitySlots((prev) =>
+      prev.map((slot, i) => (i === index ? { ...slot, ...partial } : slot))
+    );
+  }
 
   function toggleSkill(skill: (typeof STANDARD_SKILLS)[number]) {
     setSelectedSkills((prev) =>
@@ -174,6 +208,10 @@ export default function Profile() {
     const patch: Database['public']['Tables']['users']['Update'] = {
       tech_stack: selectedSkills,
     };
+    if (isMentor) {
+      const validated = parseWeeklyAvailability(availabilitySlots as unknown as Json);
+      patch.weekly_availability = slotsToJson(validated);
+    }
     const { error: updateError } = await supabase
       .from('users')
       .update(patch as never)
@@ -192,6 +230,9 @@ export default function Profile() {
       if (raw) {
         const u = JSON.parse(raw) as Record<string, unknown>;
         u.tech_stack = selectedSkills;
+        if (isMentor) {
+          u.weekly_availability = patch.weekly_availability ?? null;
+        }
         localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
       }
     } catch {
@@ -279,6 +320,82 @@ export default function Profile() {
                   );
                 })}
               </div>
+
+              {isMentor && (
+                <div className="mt-10 border-t border-slate-200 pt-8 dark:border-slate-700">
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                    Weekly availability
+                  </h2>
+                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                    Add time windows so students know when to suggest meetings (your local time).
+                    Rows with end before start are ignored when you save.
+                  </p>
+                  <div className="mt-4 space-y-3">
+                    {availabilitySlots.length === 0 ? (
+                      <p className="text-sm text-slate-500 dark:text-slate-400">No windows yet.</p>
+                    ) : (
+                      availabilitySlots.map((slot, index) => (
+                        <div
+                          key={`${slot.day}-${slot.start}-${slot.end}-${index}`}
+                          className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-600 dark:bg-gray-700/30 sm:flex-row sm:flex-wrap sm:items-center"
+                        >
+                          <label className="flex min-w-[8rem] flex-1 flex-col gap-1 text-xs font-medium text-slate-600 dark:text-slate-400">
+                            Day
+                            <select
+                              value={slot.day}
+                              onChange={(e) =>
+                                updateAvailabilitySlot(index, { day: e.target.value as Weekday })
+                              }
+                              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-gray-800 dark:text-white"
+                            >
+                              {WEEKDAY_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="flex min-w-[6rem] flex-1 flex-col gap-1 text-xs font-medium text-slate-600 dark:text-slate-400">
+                            Start
+                            <input
+                              type="time"
+                              value={slot.start}
+                              onChange={(e) => updateAvailabilitySlot(index, { start: e.target.value })}
+                              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-gray-800 dark:text-white"
+                            />
+                          </label>
+                          <label className="flex min-w-[6rem] flex-1 flex-col gap-1 text-xs font-medium text-slate-600 dark:text-slate-400">
+                            End
+                            <input
+                              type="time"
+                              value={slot.end}
+                              onChange={(e) => updateAvailabilitySlot(index, { end: e.target.value })}
+                              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-gray-800 dark:text-white"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => removeAvailabilityRow(index)}
+                            className="inline-flex items-center justify-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 dark:border-red-900/60 dark:text-red-400 dark:hover:bg-red-950/40 sm:mt-5 sm:self-end"
+                            aria-label="Remove time window"
+                          >
+                            <Trash2 className="h-4 w-4" aria-hidden />
+                            Remove
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addAvailabilityRow}
+                    className="mt-4 inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-gray-800 dark:text-slate-200 dark:hover:bg-slate-700/80"
+                  >
+                    <Plus className="h-4 w-4" aria-hidden />
+                    Add time window
+                  </button>
+                </div>
+              )}
 
               <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <button

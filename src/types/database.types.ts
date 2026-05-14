@@ -17,6 +17,7 @@ export type Database = {
           role: string;
           tech_stack: string[] | null;
           password_hash: string;
+          weekly_availability: Json | null;
           created_at: string;
         };
         Insert: {
@@ -26,6 +27,7 @@ export type Database = {
           role: string;
           tech_stack?: string[] | null;
           password_hash: string;
+          weekly_availability?: Json | null;
           created_at?: string;
         };
         Update: {
@@ -35,6 +37,7 @@ export type Database = {
           role?: string;
           tech_stack?: string[] | null;
           password_hash?: string;
+          weekly_availability?: Json | null;
           created_at?: string;
         };
       };
@@ -42,6 +45,8 @@ export type Database = {
         Row: {
           profile_id: string;
           user_id: string;
+          full_name: string | null;
+          avatar_url: string | null;
           bio: string | null;
           github_url: string | null;
           max_capacity: number | null;
@@ -50,6 +55,8 @@ export type Database = {
         Insert: {
           profile_id?: string;
           user_id: string;
+          full_name?: string | null;
+          avatar_url?: string | null;
           bio?: string | null;
           github_url?: string | null;
           max_capacity?: number | null;
@@ -58,6 +65,8 @@ export type Database = {
         Update: {
           profile_id?: string;
           user_id?: string;
+          full_name?: string | null;
+          avatar_url?: string | null;
           bio?: string | null;
           github_url?: string | null;
           max_capacity?: number | null;
@@ -101,6 +110,8 @@ export type Database = {
           start_date: string;
           end_date: string;
           status: string;
+          meeting_link: string | null;
+          scheduled_time: string | null;
           created_at: string;
         };
         Insert: {
@@ -110,6 +121,8 @@ export type Database = {
           start_date: string;
           end_date: string;
           status: string;
+          meeting_link?: string | null;
+          scheduled_time?: string | null;
           created_at?: string;
         };
         Update: {
@@ -119,6 +132,8 @@ export type Database = {
           start_date?: string;
           end_date?: string;
           status?: string;
+          meeting_link?: string | null;
+          scheduled_time?: string | null;
           created_at?: string;
         };
       };

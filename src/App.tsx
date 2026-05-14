@@ -9,6 +9,7 @@ import MilestoneTimeline from './pages/MilestoneTimeline.tsx';
 import StudentDashboard from './pages/StudentDashboard.tsx';
 import Profile from './pages/Profile.tsx';
 import MentorsDirectory from './pages/MentorsDirectory.tsx';
+import MentorshipDetails from './pages/MentorshipDetails.tsx';
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
       </Route>
       <Route element={<ProtectedRoute allowedRoles={['mentor', 'student']} />}>
         <Route path="/milestones/:pairingId" element={<MilestoneTimeline />} />
+        <Route path="/mentorship/:pairingId" element={<MentorshipDetails />} />
       </Route>
       <Route element={<ProtectedRoute allowedRoles={['student']} />}>
         <Route path="/student-dashboard" element={<StudentDashboard />} />

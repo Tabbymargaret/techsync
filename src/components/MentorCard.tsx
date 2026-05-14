@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import emailjs from '@emailjs/browser';
 import { Check, Flame, UserPlus } from 'lucide-react';
+import MentorWeeklyAvailability from './MentorWeeklyAvailability.tsx';
 import { getMentorDisplayName } from '../lib/mentors';
 import { supabase } from '../lib/supabase';
+import type { Json } from '../types/database.types';
 
 export type MentorCardData = {
   user_id: string;
@@ -10,6 +12,7 @@ export type MentorCardData = {
   email?: string | null;
   tech_stack: string[] | null;
   matchScore: number;
+  weekly_availability?: Json | null;
 };
 
 type MentorCardProps = {
@@ -164,6 +167,9 @@ export default function MentorCard({
             </span>
           ))
         )}
+      </div>
+      <div className="mt-4">
+        <MentorWeeklyAvailability value={mentor.weekly_availability ?? null} />
       </div>
       {isViewerMentor ? (
         <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-center text-xs font-medium text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
