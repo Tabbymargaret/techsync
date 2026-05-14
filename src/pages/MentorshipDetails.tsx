@@ -11,6 +11,7 @@ import {
 import Navbar from '../components/NavBar.tsx';
 import MentorWeeklyAvailability from '../components/MentorWeeklyAvailability.tsx';
 import { dashboardPathForRole, dashboardPathFromStoredUser } from '../lib/dashboardPath';
+import { isValidMeetingLink, normalizeMeetingLinkInput } from '../lib/meetingLink';
 import { supabase } from '../lib/supabase';
 import type { Database } from '../types/database.types';
 
@@ -231,12 +232,19 @@ export default function MentorshipDetails() {
     return Math.round((milestones.filter((m) => milestoneDone(m)).length / milestones.length) * 100);
   }, [milestones]);
 
+  const syncLinkInvalid =
+    syncDraft.trim() !== '' && !isValidMeetingLink(syncDraft);
+  const canSaveMeetingLink =
+    syncDraft.trim() === '' || isValidMeetingLink(syncDraft);
+
   async function handleSaveSyncLink() {
     if (!pairingId || viewerRole !== 'mentor') return;
     const trimmed = syncDraft.trim();
+    if (trimmed && !isValidMeetingLink(trimmed)) return;
+    const toStore = trimmed ? normalizeMeetingLinkInput(trimmed) : '';
     setSyncSaving(true);
     setError('');
-    const patch: PairingUpdate = { meeting_link: trimmed || null };
+    const patch: PairingUpdate = { meeting_link: toStore || null };
     const { error: updErr } = await supabase
       .from('mentorship_pairing')
       .update(patch as PairingUpdate as never)
@@ -249,7 +257,8 @@ export default function MentorshipDetails() {
       return;
     }
 
-    setMeetingLink(trimmed || null);
+    setMeetingLink(toStore || null);
+    setSyncDraft(toStore);
     setSyncToast('saved');
   }
 
@@ -440,24 +449,49 @@ export default function MentorshipDetails() {
                     <h3 className="text-sm font-semibold">Live sync setup</h3>
                   </div>
                   <p className="mt-2 text-xs text-violet-800/90 dark:text-violet-300/90">
-                    Paste a Google Meet or Zoom link. Students see it immediately when they open this
-                    hub.
+                    Paste a Google Meet, Zoom, Microsoft Teams, or Webex link. Students see it
+                    immediately when they open this hub.{' '}
+                    <span className="font-medium">https://</span> is added automatically if you omit
+                    it.
                   </p>
-                  <label className="mt-3 block text-xs font-medium text-violet-900 dark:text-violet-200">
-                    Google Meet / Zoom link
+                  <label
+                    className="mt-3 block text-xs font-medium text-violet-900 dark:text-violet-200"
+                    htmlFor="mentorship-live-sync-url"
+                  >
+                    Google Meet / Zoom / Teams / Webex link
                     <input
+                      id="mentorship-live-sync-url"
                       type="url"
+                      inputMode="url"
+                      autoComplete="url"
                       value={syncDraft}
                       onChange={(e) => setSyncDraft(e.target.value)}
                       placeholder="https://meet.google.com/... or https://zoom.us/..."
-                      className="mt-1.5 w-full rounded-lg border border-violet-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/30 dark:border-violet-800 dark:bg-gray-900 dark:text-white"
+                      aria-invalid={syncLinkInvalid}
+                      aria-describedby={
+                        syncLinkInvalid ? 'mentorship-live-sync-url-error' : undefined
+                      }
+                      className={`mt-1.5 w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 dark:bg-gray-900 dark:text-white ${
+                        syncLinkInvalid
+                          ? 'border-red-500 focus:border-red-500 focus:ring-red-500/30 dark:border-red-500'
+                          : 'border-violet-200 focus:border-violet-500 focus:ring-violet-500/30 dark:border-violet-800'
+                      }`}
                     />
                   </label>
+                  {syncLinkInvalid && (
+                    <p
+                      id="mentorship-live-sync-url-error"
+                      className="mt-1.5 text-xs font-medium text-red-600 dark:text-red-400"
+                      role="alert"
+                    >
+                      Please enter a valid meeting URL
+                    </p>
+                  )}
                   <button
                     type="button"
                     onClick={() => void handleSaveSyncLink()}
-                    disabled={syncSaving}
-                    className="mt-3 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-500 disabled:opacity-60"
+                    disabled={syncSaving || !canSaveMeetingLink}
+                    className="mt-3 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {syncSaving ? 'Saving…' : 'Save link'}
                   </button>
@@ -491,7 +525,7 @@ export default function MentorshipDetails() {
                     <ExternalLink className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
                   </a>
                   <p className="mt-3 text-center text-xs text-slate-600 dark:text-slate-400">
-                    Opens your mentor&apos;s Meet or Zoom link in a new tab.
+                    Opens your mentor&apos;s meeting link in a new tab.
                   </p>
                 </div>
               )}
