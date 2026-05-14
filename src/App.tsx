@@ -23,6 +23,8 @@ function App() {
       </Route>
       <Route element={<ProtectedRoute allowedRoles={['mentor']} />}>
         <Route path="/mentor-dashboard" element={<MentorDashboard />} />
+      </Route>
+      <Route element={<ProtectedRoute allowedRoles={['mentor', 'student']} />}>
         <Route path="/milestones/:pairingId" element={<MilestoneTimeline />} />
       </Route>
       <Route element={<ProtectedRoute allowedRoles={['student']} />}>

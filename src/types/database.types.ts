@@ -130,7 +130,8 @@ export type Database = {
           description: string | null;
           due_date: string;
           progress_status: string;
-          is_completed: boolean;
+          evidence_url: string | null;
+          feedback_text: string | null;
           created_at: string;
         };
         Insert: {
@@ -140,7 +141,8 @@ export type Database = {
           description?: string | null;
           due_date: string;
           progress_status: string;
-          is_completed?: boolean;
+          evidence_url?: string | null;
+          feedback_text?: string | null;
           created_at?: string;
         };
         Update: {
@@ -150,7 +152,8 @@ export type Database = {
           description?: string | null;
           due_date?: string;
           progress_status?: string;
-          is_completed?: boolean;
+          evidence_url?: string | null;
+          feedback_text?: string | null;
           created_at?: string;
         };
       };

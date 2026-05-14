@@ -589,7 +589,10 @@ export default function MentorDashboard() {
               ) : (
                 <ul className="space-y-4">
                   {activeMentees.map((mentee) => {
-                    const completedCount = mentee.milestones.filter((m) => m.is_completed).length;
+                    const completedCount = mentee.milestones.filter(
+                      (m) =>
+                        (m.progress_status ?? '').trim().toLowerCase().replace(/_/g, ' ') === 'completed'
+                    ).length;
                     const totalCount = mentee.milestones.length;
                     return (
                       <li key={mentee.pairing_id}>
