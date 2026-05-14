@@ -20,10 +20,10 @@ export function calculateMatchScore(
   const mentorSkills = normalizeSkillTokens(mentorStack);
   const studentSkills = normalizeSkillTokens(studentStack);
 
-  if (mentorSkills.length === 0) return 0;
+  if (studentSkills.length === 0) return 0;
 
   const matches = studentSkills.filter((skill) => mentorSkills.includes(skill));
-  const score = Math.round((matches.length / mentorSkills.length) * 100);
+  const score = Math.round((matches.length / studentSkills.length) * 100);
 
   if (import.meta.env.DEV) {
     // eslint-disable-next-line no-console -- intentional dev-only match verification

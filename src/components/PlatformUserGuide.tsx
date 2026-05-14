@@ -101,9 +101,11 @@ function buildBlocks(): Record<CategoryId, GuideBlock[]> {
               </li>
               <li>
                 <strong className="text-slate-800 dark:text-slate-200">Match score</strong> = (
-                matching student skills ÷ mentor&apos;s number of skills ) × 100, rounded to a whole percent.
+                matching student skills ÷ <strong className="text-slate-800 dark:text-slate-200">your</strong> number of
+                skills ) × 100, rounded to a whole percent. That way mentors with very long stacks are not penalized
+                compared to students with smaller profiles.
               </li>
-              <li>If the mentor has no skills listed, the score is 0%.</li>
+              <li>If you have no skills on your profile, the score is 0% (no division).</li>
             </ol>
             <div className="flex flex-wrap gap-2">
               <InfoBadge>Skill overlap</InfoBadge>

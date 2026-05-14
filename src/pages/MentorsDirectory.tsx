@@ -50,6 +50,7 @@ export default function MentorsDirectory() {
   const [fetchError, setFetchError] = useState('');
   const [studentUserId, setStudentUserId] = useState('');
   const [viewerRole, setViewerRole] = useState('');
+  const [viewerTechStack, setViewerTechStack] = useState<string[]>([]);
   const [requestedMentorIds, setRequestedMentorIds] = useState<Set<string>>(() => new Set());
   /** Pending or active pairing — disables requesting other mentors (same as StudentDashboard). */
   const [mentorshipSlotLocked, setMentorshipSlotLocked] = useState(false);
@@ -116,6 +117,7 @@ export default function MentorsDirectory() {
         !studentError && studentRow
           ? ((studentRow as Pick<UserRow, 'tech_stack'>).tech_stack ?? [])
           : [];
+      setViewerTechStack(studentStack);
 
       const { data: mentorRows, error: mentorsError } = await supabase
         .from('users')
@@ -187,6 +189,7 @@ export default function MentorsDirectory() {
                 <MentorCard
                   key={mentor.user_id}
                   mentor={mentor}
+                  studentTechStack={viewerTechStack}
                   studentId={studentUserId}
                   viewerRole={viewerRole}
                   hasRequested={requestedMentorIds.has(mentor.user_id)}

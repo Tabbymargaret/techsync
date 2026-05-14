@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import emailjs from '@emailjs/browser';
 import { Check, Flame, UserPlus } from 'lucide-react';
 import MentorWeeklyAvailability from './MentorWeeklyAvailability.tsx';
-import { getMentorDisplayName } from '../lib/mentors';
+import { calculateMatchScore, getMentorDisplayName } from '../lib/mentors';
 import { supabase } from '../lib/supabase';
 import type { Json } from '../types/database.types';
 
@@ -17,6 +17,8 @@ export type MentorCardData = {
 
 type MentorCardProps = {
   mentor: MentorCardData;
+  /** Student profile tech stack — used to compute match % (denominator = normalized student skill count). */
+  studentTechStack: string[] | null;
   /** Logged-in user `user_id` from `localStorage` `techsync_user` (see docs/CONTEXT.md). */
   studentId: string;
   /** `techsync_user.role` — used to block mentor-to-mentor requests. */
@@ -61,6 +63,7 @@ export async function insertMentorshipRequest(
 
 export default function MentorCard({
   mentor,
+  studentTechStack,
   studentId,
   viewerRole,
   hasRequested,
@@ -79,6 +82,11 @@ export default function MentorCard({
     const t = window.setTimeout(() => setToast(null), TOAST_MS);
     return () => window.clearTimeout(t);
   }, [toast]);
+
+  const matchScoreDisplay = useMemo(
+    () => calculateMatchScore(studentTechStack ?? [], mentor.tech_stack ?? []),
+    [studentTechStack, mentor.tech_stack]
+  );
 
   const handleSendRequest = useCallback(async () => {
     if (studentId.trim() === mentor.user_id.trim()) return;
@@ -151,7 +159,7 @@ export default function MentorCard({
         </p>
         <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
           <Flame className="h-3.5 w-3.5 text-amber-800 dark:text-amber-200" aria-hidden />
-          {mentor.matchScore}% Match
+          {matchScoreDisplay}% Match
         </span>
       </div>
       <div className="flex flex-1 flex-wrap content-start gap-2">

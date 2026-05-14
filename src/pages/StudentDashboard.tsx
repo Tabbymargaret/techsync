@@ -476,6 +476,7 @@ export default function StudentDashboard() {
                   <MentorCard
                     key={mentor.user_id}
                     mentor={mentor}
+                    studentTechStack={currentStudent?.tech_stack ?? null}
                     studentId={currentStudent?.user_id ?? ''}
                     viewerRole={currentStudent?.role ?? ''}
                     hasRequested={requestedMentorIds.has(mentor.user_id)}
