@@ -1,10 +1,13 @@
+/** Matches optional http:// or https:// at the start of a meeting URL (case-insensitive). */
+export const MEETING_LINK_HTTP_SCHEME_REGEX = /^https?:\/\//i;
+
 /**
  * If the user omitted a scheme, prepend https:// so URL parsing and provider checks work.
  */
 export function normalizeMeetingLinkInput(raw: string): string {
   const t = raw.trim();
   if (!t) return '';
-  if (/^https?:\/\//i.test(t)) return t;
+  if (MEETING_LINK_HTTP_SCHEME_REGEX.test(t)) return t;
   return `https://${t}`;
 }
 
